@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -7,38 +7,83 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700;9..144,800&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper:#FBF6EC; --ink:#2A2118; --ink-soft:#6B5F4F;
-    --marigold:#E8A33D; --marigold-dark:#C7842A; --brick:#A63D33; --olive:#6E7F4B; --line:#E7DCC8; --card:#FFFFFF;
+    --paper:#FBF3E7;
+    --paper-deep:#F3E6CE;
+    --ink:#241A12;
+    --ink-soft:#8A7A63;
+    --brand:#C0432B;
+    --brand-dark:#9E3620;
+    --brand-tint:#F4DED6;
+    --gold:#DFA23A;
+    --gold-tint:#F7E8C9;
+    --olive:#5C7A46;
+    --olive-tint:#E3EBD9;
+    --line:#E9DCC3;
+    --card:#FFFFFF;
   }
   html,body{background:var(--paper); color:var(--ink); font-family:'Work Sans',sans-serif;}
   .font-display{font-family:'Fraunces',serif;}
   ::-webkit-scrollbar{display:none;}
   * {scrollbar-width:none;}
-  .tab-active{ color:var(--ink); border-bottom:2px solid var(--brick); }
-  .tab-inactive{ color:var(--ink-soft); border-bottom:2px solid transparent; }
-  .chip{ border:1px solid var(--line); color:var(--ink-soft); }
-  .chip-active{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
-  .qty-btn{ width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1px solid var(--line); border-radius:6px; }
-  .divider{ border-bottom:1px solid var(--line); }
-  .btn-primary{ background:var(--brick); color:#fff; }
-  .btn-primary:active{ background:#8a3129; }
-  .status-dot{ width:10px; height:10px; border-radius:999px; }
-  .status-line{ height:2px; background:var(--line); }
-  .status-line-done{ height:2px; background:var(--olive); }
-  @keyframes slideUp{ from{ transform:translateY(100%);} to{ transform:translateY(0);} }
-  .sheet{ animation: slideUp 0.25s ease-out; }
-  input,textarea{ background:#fff; border:1px solid var(--line); }
-  input:focus,textarea:focus{ outline:none; border-color:var(--ink-soft); }
   .hidden{ display:none !important; }
-  /* admin-only */
-  .admin-tab-active{ background:var(--ink); color:var(--paper); }
-  .admin-tab-inactive{ color:var(--ink-soft); }
-  .btn-sm{ font-size:12px; font-weight:600; padding:6px 12px; border-radius:8px; }
-  .toggle{ width:38px; height:22px; border-radius:999px; position:relative; transition:.15s; }
-  .toggle-dot{ width:18px; height:18px; border-radius:999px; background:#fff; position:absolute; top:2px; transition:.15s; }
+
+  /* ---------- shared bits ---------- */
+  .logo-mark{
+    width:34px; height:34px; border-radius:10px; background:var(--brand);
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-family:'Fraunces',serif; font-weight:700; font-size:17px;
+    box-shadow:0 3px 0 var(--brand-dark);
+  }
+  .veg{ display:inline-block; width:11px; height:11px; border:1.5px solid var(--olive); border-radius:2px; position:relative; margin-right:7px; flex-shrink:0; }
+  .veg::after{ content:''; position:absolute; inset:2.2px; background:var(--olive); border-radius:50%; }
+  input,textarea{ background:#fff; border:1px solid var(--line); }
+  input:focus,textarea:focus{ outline:none; border-color:var(--brand); }
+  @keyframes slideUp{ from{ transform:translateY(100%);} to{ transform:translateY(0);} }
+  .sheet{ animation: slideUp 0.28s cubic-bezier(.2,.8,.2,1); }
+  @keyframes popIn{ from{ opacity:0; transform:scale(.96);} to{ opacity:1; transform:scale(1);} }
+  .pop{ animation: popIn 0.18s ease-out; }
+
+  /* ---------- customer: segmented restaurant switcher ---------- */
+  .seg-wrap{ background:var(--paper-deep); border-radius:999px; padding:4px; display:flex; gap:2px; }
+  .seg-btn{ flex:1; text-align:center; padding:8px 10px; border-radius:999px; font-size:13px; font-weight:600; color:var(--ink-soft); white-space:nowrap; transition:.15s; }
+  .seg-btn-active{ background:var(--card); color:var(--ink); box-shadow:0 1px 3px rgba(36,26,18,.12); }
+
+  /* ---------- customer: category chips ---------- */
+  .chip{ border:1px solid var(--line); color:var(--ink-soft); background:var(--card); }
+  .chip-active{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+
+  /* ---------- customer: item cards ---------- */
+  .item-card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:12px 14px; margin-bottom:10px; }
+  .item-card.out{ opacity:.45; }
+  .add-btn{ border:1.5px solid var(--brand); color:var(--brand); font-weight:700; font-size:12.5px; padding:6px 16px; border-radius:999px; background:var(--card); }
+  .add-btn:active{ background:var(--brand-tint); }
+  .qty-pill{ display:flex; align-items:center; gap:10px; background:var(--brand); border-radius:999px; padding:4px 10px; }
+  .qty-btn{ width:20px; height:20px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; line-height:1; }
+  .qty-num{ color:#fff; font-weight:700; font-size:13px; min-width:12px; text-align:center; }
+  .portion-row{ display:flex; align-items:center; justify-content:space-between; padding:6px 0; }
+
+  /* ---------- customer: cart bar + sheet ---------- */
+  .cart-fab{ background:linear-gradient(135deg, var(--brand), var(--brand-dark)); box-shadow:0 8px 20px rgba(192,67,43,.35); }
+  .drag-handle{ width:36px; height:4px; border-radius:999px; background:var(--line); margin:0 auto; }
+
+  /* ---------- customer: tracking timeline ---------- */
+  .tl-row{ display:flex; gap:14px; }
+  .tl-icon{ width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; z-index:1; }
+  .tl-line{ width:2px; flex:1; margin:2px 0; background:var(--line); }
+  .tl-line-done{ background:var(--olive); }
+
+  /* ---------- admin ---------- */
+  .admin-seg-wrap{ background:var(--paper-deep); border-radius:999px; padding:4px; display:inline-flex; gap:2px; }
+  .admin-seg-btn{ padding:7px 18px; border-radius:999px; font-size:13px; font-weight:600; color:var(--ink-soft); }
+  .admin-seg-btn-active{ background:var(--ink); color:var(--paper); }
+  .stat-card{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; }
+  .order-card{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; border-left-width:4px; }
+  .status-pill{ font-size:11px; font-weight:700; padding:3px 10px; border-radius:999px; }
+  .toggle{ width:40px; height:23px; border-radius:999px; position:relative; transition:.15s; flex-shrink:0; }
+  .toggle-dot{ width:19px; height:19px; border-radius:999px; background:#fff; position:absolute; top:2px; transition:.15s; box-shadow:0 1px 2px rgba(0,0,0,.2); }
 </style>
 </head>
 <body class="max-w-md mx-auto min-h-screen relative">
@@ -46,35 +91,47 @@
 <!-- =========================================================
      CUSTOMER APP — shown at the plain URL (no #admin)
      ========================================================= -->
-<div id="customerApp" class="pb-24">
+<div id="customerApp" class="pb-28">
 
   <header class="sticky top-0 z-30 bg-[var(--paper)]/95 backdrop-blur border-b" style="border-color:var(--line)">
-    <div class="flex items-center justify-between px-4 pt-4 pb-2">
-      <h1 class="font-display text-2xl font-semibold tracking-tight">SnapIt<span style="color:var(--brick)">.</span></h1>
+    <div class="flex items-center gap-2.5 px-4 pt-4 pb-3">
+      <div class="logo-mark">S</div>
+      <h1 class="font-display text-[22px] font-semibold tracking-tight">SnapIt</h1>
     </div>
-    <div id="restaurantTabs" class="flex gap-6 px-4 text-sm font-medium overflow-x-auto whitespace-nowrap"></div>
+    <div class="px-4 pb-3">
+      <div id="restaurantTabs" class="seg-wrap"></div>
+    </div>
   </header>
 
+  <div class="px-4 pt-3">
+    <input id="searchInput" type="text" placeholder="Search for a dish…" oninput="CustomerApp.setSearch(this.value)"
+      class="w-full rounded-xl px-4 py-2.5 text-sm">
+  </div>
   <div id="categoryChips" class="flex gap-2 px-4 py-3 overflow-x-auto whitespace-nowrap text-sm"></div>
 
   <main id="menuList" class="px-4 pb-6"></main>
 
   <div id="cartBar" class="hidden fixed bottom-0 left-0 right-0 z-40">
-    <div class="max-w-md mx-auto px-4 pb-4">
-      <button onclick="CustomerApp.openCart()" class="btn-primary w-full rounded-xl py-3.5 px-4 flex items-center justify-between shadow-lg">
-        <span id="cartBarCount" class="text-sm font-semibold"></span>
-        <span class="text-sm font-medium">View cart →</span>
-        <span id="cartBarTotal" class="text-sm font-semibold"></span>
+    <div class="max-w-md mx-auto px-4 pb-5">
+      <button onclick="CustomerApp.openCart()" class="cart-fab w-full rounded-2xl py-4 px-5 flex items-center justify-between text-white">
+        <span class="flex items-center gap-2 text-sm font-semibold">
+          <span id="cartBarCount"></span>
+        </span>
+        <span class="text-sm font-semibold tracking-wide">VIEW CART</span>
+        <span id="cartBarTotal" class="text-sm font-bold"></span>
       </button>
     </div>
   </div>
 
   <div id="cartSheet" class="hidden fixed inset-0 z-50">
-    <div class="absolute inset-0 bg-black/40" onclick="CustomerApp.closeCart()"></div>
-    <div class="sheet absolute bottom-0 left-0 right-0 max-w-md mx-auto bg-[var(--card)] rounded-t-2xl max-h-[88vh] overflow-y-auto">
-      <div class="sticky top-0 bg-[var(--card)] px-5 pt-4 pb-3 border-b flex items-center justify-between" style="border-color:var(--line)">
-        <h2 class="font-display text-xl font-semibold">Your order</h2>
-        <button onclick="CustomerApp.closeCart()" class="text-[var(--ink-soft)] text-2xl leading-none">&times;</button>
+    <div class="absolute inset-0 bg-black/45" onclick="CustomerApp.closeCart()"></div>
+    <div class="sheet absolute bottom-0 left-0 right-0 max-w-md mx-auto bg-[var(--card)] rounded-t-[28px] max-h-[88vh] overflow-y-auto">
+      <div class="sticky top-0 bg-[var(--card)] pt-3 pb-3 px-5 border-b rounded-t-[28px]" style="border-color:var(--line)">
+        <div class="drag-handle mb-3"></div>
+        <div class="flex items-center justify-between">
+          <h2 class="font-display text-xl font-semibold">Your order</h2>
+          <button onclick="CustomerApp.closeCart()" class="text-[var(--ink-soft)] text-2xl leading-none">&times;</button>
+        </div>
       </div>
       <div id="sheetBody" class="p-5"></div>
     </div>
@@ -85,44 +142,48 @@
   </div>
 
 </div>
-
 <!-- =========================================================
      ADMIN APP — shown at yoursite.com/#admin
      ========================================================= -->
 <div id="adminApp" class="hidden">
 
-  <div id="gate" class="min-h-screen flex flex-col items-center justify-center px-6">
-    <h1 class="font-display text-3xl font-semibold mb-6">SnapIt Admin</h1>
+  <div id="gate" class="min-h-screen flex flex-col items-center justify-center px-8">
+    <div class="logo-mark mb-4" style="width:52px;height:52px;font-size:24px;border-radius:16px;">S</div>
+    <h1 class="font-display text-2xl font-semibold mb-1">SnapIt Admin</h1>
+    <p class="text-sm text-[var(--ink-soft)] mb-6">Enter the passcode to continue</p>
     <input id="passcodeInput" type="password" placeholder="Admin passcode"
-      class="w-full max-w-xs border rounded-lg px-3 py-2.5 text-sm mb-3" style="border-color:var(--line)">
-    <button onclick="AdminApp.checkPasscode()" class="w-full max-w-xs rounded-lg py-2.5 text-sm font-semibold text-white" style="background:var(--brick)">
+      class="w-full max-w-xs rounded-xl px-4 py-3 text-sm mb-3 text-center tracking-widest">
+    <button onclick="AdminApp.checkPasscode()" class="w-full max-w-xs rounded-xl py-3 text-sm font-semibold text-white" style="background:var(--brand)">
       Enter
     </button>
-    <p id="gateError" class="text-xs mt-2" style="color:var(--brick)"></p>
+    <p id="gateError" class="text-xs mt-2" style="color:var(--brand)"></p>
   </div>
 
   <div id="dashboard" class="hidden pb-16">
-    <header class="sticky top-0 z-20 bg-[var(--paper)]/95 backdrop-blur border-b px-4 pt-4 pb-2" style="border-color:var(--line)">
-      <h1 class="font-display text-2xl font-semibold mb-3">SnapIt Admin</h1>
-      <div class="flex gap-2 text-sm font-medium">
-        <button id="tabOrders" onclick="AdminApp.switchTab('orders')" class="admin-tab-active px-3 py-1.5 rounded-lg">Orders</button>
-        <button id="tabMenu" onclick="AdminApp.switchTab('menu')" class="admin-tab-inactive px-3 py-1.5 rounded-lg">Menu</button>
+    <header class="sticky top-0 z-20 bg-[var(--paper)]/95 backdrop-blur border-b px-4 pt-4 pb-3" style="border-color:var(--line)">
+      <div class="flex items-center gap-2.5 mb-3">
+        <div class="logo-mark" style="width:30px;height:30px;font-size:15px;border-radius:9px;">S</div>
+        <h1 class="font-display text-xl font-semibold">SnapIt Admin</h1>
+      </div>
+      <div class="admin-seg-wrap">
+        <button id="tabOrders" onclick="AdminApp.switchTab('orders')" class="admin-seg-btn admin-seg-btn-active">Orders</button>
+        <button id="tabMenu" onclick="AdminApp.switchTab('menu')" class="admin-seg-btn">Menu</button>
       </div>
     </header>
 
     <section id="ordersTab" class="px-4 py-4">
-      <div class="grid grid-cols-3 gap-2 mb-4 text-center">
-        <div class="rounded-lg p-3" style="background:var(--card); border:1px solid var(--line)">
-          <p class="text-xs text-[var(--ink-soft)]">Today's orders</p>
-          <p id="statTodayCount" class="font-display text-xl font-semibold">0</p>
+      <div class="grid grid-cols-3 gap-2.5 mb-5">
+        <div class="stat-card text-center">
+          <p class="text-[11px] text-[var(--ink-soft)] mb-0.5">Today's orders</p>
+          <p id="statTodayCount" class="font-display text-2xl font-semibold" style="color:var(--gold)">0</p>
         </div>
-        <div class="rounded-lg p-3" style="background:var(--card); border:1px solid var(--line)">
-          <p class="text-xs text-[var(--ink-soft)]">Today's sales</p>
-          <p id="statTodaySales" class="font-display text-xl font-semibold">₹0</p>
+        <div class="stat-card text-center">
+          <p class="text-[11px] text-[var(--ink-soft)] mb-0.5">Today's sales</p>
+          <p id="statTodaySales" class="font-display text-2xl font-semibold" style="color:var(--brand)">₹0</p>
         </div>
-        <div class="rounded-lg p-3" style="background:var(--card); border:1px solid var(--line)">
-          <p class="text-xs text-[var(--ink-soft)]">Active</p>
-          <p id="statActiveCount" class="font-display text-xl font-semibold">0</p>
+        <div class="stat-card text-center">
+          <p class="text-[11px] text-[var(--ink-soft)] mb-0.5">Active</p>
+          <p id="statActiveCount" class="font-display text-2xl font-semibold" style="color:var(--olive)">0</p>
         </div>
       </div>
       <div id="ordersList" class="space-y-3"></div>
@@ -148,6 +209,27 @@ const SUPABASE_URL = "https://jrakakvymmgvyquokcso.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpyYWtha3Z5bW1ndnlxdW9rY3NvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0MTY0ODYsImV4cCI6MjEwNDk5MjQ4Nn0.A37GvxOizrMcgkrQAAQTv-ZSFvFcAv17MtwuPOmiEB8";
 const money = n => `₹${Number(n).toFixed(0)}`;
 
+/* Small food emoji per category, purely decorative */
+function catEmoji(name){
+  const n = (name||'').toLowerCase();
+  if (n.includes('burger')) return '🍔';
+  if (n.includes('pizza')) return '🍕';
+  if (n.includes('fries')) return '🍟';
+  if (n.includes('noodle') || n.includes('chawmin') || n.includes('chaumin')) return '🍜';
+  if (n.includes('fried rice') || n === 'rice' || n.includes('rice')) return '🍚';
+  if (n.includes('momo')) return '🥟';
+  if (n.includes('maggi')) return '🍲';
+  if (n.includes('pasta')) return '🍝';
+  if (n.includes('chilli')) return '🌶️';
+  if (n.includes('tea') || n.includes('coffee')) return '☕';
+  if (n.includes('shake') || n.includes('lassi')) return '🥤';
+  if (n.includes('sandwich') || n.includes('snack')) return '🥪';
+  if (n.includes('ice cream')) return '🍨';
+  if (n.includes('puri')) return '🥘';
+  return '🍽️';
+}
+const VEG = '<span class="veg"></span>';
+
 /* =========================================================
    CUSTOMER APP — namespaced so it can't collide with AdminApp
    ========================================================= */
@@ -159,6 +241,7 @@ const CustomerApp = (function(){
   let items = [];
   let activeRestaurantId = null;
   let activeCategoryId = 'all';
+  let searchQuery = '';
   let cart = [];
   let settings = { delivery_fee: 20, tax_percent: 5 };
   let orderChannel = null;
@@ -182,8 +265,18 @@ const CustomerApp = (function(){
   }
 
   async function loadMenuFor(restaurantId){
+    const isSwitch = activeRestaurantId !== null && activeRestaurantId !== restaurantId;
+    if (isSwitch && cart.length > 0){
+      const ok = confirm('Switching restaurants will clear your current cart. Continue?');
+      if (!ok) { renderRestaurantTabs(); return; }
+      cart = [];
+      renderCartBar();
+    }
     activeRestaurantId = restaurantId;
     activeCategoryId = 'all';
+    searchQuery = '';
+    const searchEl = document.getElementById('searchInput');
+    if (searchEl) searchEl.value = '';
     const { data: cats } = await sb.from('categories').select('*').eq('restaurant_id', restaurantId).order('sort_order');
     const { data: menuItems } = await sb.from('menu_items').select('*').eq('restaurant_id', restaurantId).order('sort_order');
     categories = cats || [];
@@ -195,24 +288,33 @@ const CustomerApp = (function(){
 
   function renderRestaurantTabs(){
     document.getElementById('restaurantTabs').innerHTML = restaurants.map(r => `
-      <button onclick="CustomerApp.loadMenuFor('${r.id}')" class="py-2 ${r.id===activeRestaurantId ? 'tab-active':'tab-inactive'}">
+      <button onclick="CustomerApp.loadMenuFor('${r.id}')" class="seg-btn ${r.id===activeRestaurantId ? 'seg-btn-active':''}">
         ${r.name}
       </button>`).join('');
   }
 
   function renderCategoryChips(){
-    const chips = ['<button onclick="CustomerApp.setCategory(\'all\')" class="chip px-3 py-1.5 rounded-full '+(activeCategoryId==='all'?'chip-active':'')+'">All</button>']
+    const chips = [`<button onclick="CustomerApp.setCategory('all')" class="chip px-3.5 py-1.5 rounded-full ${activeCategoryId==='all'?'chip-active':''}">All</button>`]
       .concat(categories.map(c => `
-        <button onclick="CustomerApp.setCategory('${c.id}')" class="chip px-3 py-1.5 rounded-full ${activeCategoryId===c.id?'chip-active':''}">
-          ${c.name}
+        <button onclick="CustomerApp.setCategory('${c.id}')" class="chip px-3.5 py-1.5 rounded-full ${activeCategoryId===c.id?'chip-active':''}">
+          ${catEmoji(c.name)} ${c.name}
         </button>`));
     document.getElementById('categoryChips').innerHTML = chips.join('');
   }
 
   function setCategory(id){ activeCategoryId = id; renderCategoryChips(); renderMenuList(); }
 
+  function setSearch(value){ searchQuery = value.trim().toLowerCase(); renderMenuList(); }
+
   function renderMenuList(){
-    const visible = items.filter(i => activeCategoryId==='all' || i.category_id===activeCategoryId);
+    let visible = items.filter(i => activeCategoryId==='all' || i.category_id===activeCategoryId);
+    if (searchQuery){
+      visible = items.filter(i => i.name.toLowerCase().includes(searchQuery));
+      if (visible.length === 0){
+        document.getElementById('menuList').innerHTML = `<p class="text-[var(--ink-soft)] text-sm py-10 text-center">No dishes match “${searchQuery}”.</p>`;
+        return;
+      }
+    }
     const grouped = {};
     visible.forEach(i => {
       const cat = categories.find(c=>c.id===i.category_id);
@@ -221,39 +323,44 @@ const CustomerApp = (function(){
     });
 
     document.getElementById('menuList').innerHTML = Object.entries(grouped).map(([catName, catItems]) => `
-      <section class="mb-6">
-        <h3 class="font-display text-lg font-semibold mb-2 mt-4">${catName}</h3>
+      <section class="mb-5">
+        <h3 class="font-display text-lg font-semibold mb-2.5 mt-3 flex items-center gap-1.5">
+          <span>${catEmoji(catName)}</span> ${catName}
+        </h3>
         <div>${catItems.map(renderItemRow).join('')}</div>
       </section>`).join('') || `<p class="text-[var(--ink-soft)] text-sm py-10 text-center">No items in this category yet.</p>`;
   }
 
   function renderItemRow(item){
     if (!item.is_available){
-      return `<div class="divider py-3 flex items-center justify-between opacity-40">
-        <span class="text-sm">${item.name}</span>
-        <span class="text-xs">Out of stock</span>
+      return `<div class="item-card out flex items-center justify-between">
+        <span class="text-sm flex items-center">${VEG}${item.name}</span>
+        <span class="text-xs font-medium">Out of stock</span>
       </div>`;
     }
     if (item.price_single !== null){
       const inCart = cart.find(c => c.menu_item_id===item.id && c.portion==='single');
-      return `<div class="divider py-3 flex items-center justify-between">
-        <div>
-          <p class="text-sm font-medium">${item.name}</p>
-          <p class="text-xs text-[var(--ink-soft)] mt-0.5">${money(item.price_single)}</p>
+      return `<div class="item-card flex items-center justify-between">
+        <div class="flex items-start">
+          ${VEG}
+          <div>
+            <p class="text-sm font-medium leading-tight">${item.name}</p>
+            <p class="text-xs text-[var(--ink-soft)] mt-1">${money(item.price_single)}</p>
+          </div>
         </div>
         ${qtyControl(item, 'single', item.price_single, inCart)}
       </div>`;
     }
     const half = cart.find(c => c.menu_item_id===item.id && c.portion==='half');
     const full = cart.find(c => c.menu_item_id===item.id && c.portion==='full');
-    return `<div class="divider py-3">
-      <p class="text-sm font-medium mb-2">${item.name}</p>
-      <div class="flex flex-col gap-2">
-        <div class="flex items-center justify-between">
+    return `<div class="item-card">
+      <p class="text-sm font-medium mb-1.5 flex items-center">${VEG}${item.name}</p>
+      <div class="pl-[18px]">
+        <div class="portion-row">
           <span class="text-xs text-[var(--ink-soft)]">Half · ${money(item.price_half)}</span>
           ${qtyControl(item, 'half', item.price_half, half)}
         </div>
-        <div class="flex items-center justify-between">
+        <div class="portion-row">
           <span class="text-xs text-[var(--ink-soft)]">Full · ${money(item.price_full)}</span>
           ${qtyControl(item, 'full', item.price_full, full)}
         </div>
@@ -264,16 +371,14 @@ const CustomerApp = (function(){
   function qtyControl(item, portion, price, existing){
     const key = `${item.id}_${portion}`;
     if (!existing){
-      return `<button onclick="CustomerApp.addToCart('${item.id}','${escapeQ(item.name)}','${portion}',${price})"
-        class="text-xs font-semibold px-3 py-1.5 rounded-lg" style="border:1px solid var(--brick); color:var(--brick)">Add</button>`;
+      return `<button onclick="CustomerApp.addToCart('${item.id}','${escapeQ(item.name)}','${portion}',${price})" class="add-btn">ADD</button>`;
     }
-    return `<div class="flex items-center gap-2">
+    return `<div class="qty-pill">
       <button class="qty-btn" onclick="CustomerApp.changeQty('${key}',-1)">−</button>
-      <span class="text-sm w-4 text-center">${existing.qty}</span>
+      <span class="qty-num">${existing.qty}</span>
       <button class="qty-btn" onclick="CustomerApp.changeQty('${key}',1)">+</button>
     </div>`;
   }
-
   function escapeQ(s){ return s.replace(/'/g, "\\'"); }
 
   function addToCart(menu_item_id, name, portion, unit_price){
@@ -281,6 +386,9 @@ const CustomerApp = (function(){
     cart.push({ key, menu_item_id, name, portion, unit_price, qty: 1 });
     renderMenuList();
     renderCartBar();
+    if (navigator.vibrate) navigator.vibrate(12);
+    const bar = document.getElementById('cartBar');
+    bar.classList.remove('pop'); void bar.offsetWidth; bar.classList.add('pop');
   }
 
   function changeQty(key, delta){
@@ -318,38 +426,42 @@ const CustomerApp = (function(){
     const total = subtotal + tax + Number(settings.delivery_fee);
 
     document.getElementById('sheetBody').innerHTML = `
-      <div class="space-y-3 mb-5">
+      <div class="space-y-2.5 mb-5">
         ${cart.map(c => `
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm font-medium">${c.name}${c.portion!=='single' ? ` <span class="text-xs text-[var(--ink-soft)]">(${c.portion})</span>`:''}</p>
-              <p class="text-xs text-[var(--ink-soft)]">${money(c.unit_price)} × ${c.qty}</p>
+          <div class="flex items-center justify-between item-card !mb-0 !py-2.5">
+            <div class="flex items-start">
+              ${VEG}
+              <div>
+                <p class="text-sm font-medium leading-tight">${c.name}${c.portion!=='single' ? ` <span class="text-xs text-[var(--ink-soft)] font-normal">(${c.portion})</span>`:''}</p>
+                <p class="text-xs text-[var(--ink-soft)] mt-1">${money(c.unit_price)} × ${c.qty}</p>
+              </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="qty-pill">
               <button class="qty-btn" onclick="CustomerApp.changeQty('${c.key}',-1)">−</button>
-              <span class="text-sm w-4 text-center">${c.qty}</span>
+              <span class="qty-num">${c.qty}</span>
               <button class="qty-btn" onclick="CustomerApp.changeQty('${c.key}',1)">+</button>
             </div>
           </div>`).join('')}
       </div>
-      <div class="space-y-1.5 text-sm border-t pt-3 mb-5" style="border-color:var(--line)">
+      <div class="space-y-1.5 text-sm rounded-2xl p-4 mb-5" style="background:var(--paper-deep)">
         <div class="flex justify-between text-[var(--ink-soft)]"><span>Subtotal</span><span>${money(subtotal)}</span></div>
         <div class="flex justify-between text-[var(--ink-soft)]"><span>Tax (${settings.tax_percent}%)</span><span>${money(tax)}</span></div>
         <div class="flex justify-between text-[var(--ink-soft)]"><span>Delivery fee</span><span>${money(settings.delivery_fee)}</span></div>
-        <div class="flex justify-between font-semibold text-base pt-1"><span>Total</span><span>${money(total)}</span></div>
+        <div class="flex justify-between font-semibold text-base pt-2 mt-1 border-t" style="border-color:var(--line)"><span>Total</span><span>${money(total)}</span></div>
       </div>
       <div class="space-y-3 mb-5">
-        <input id="custName" type="text" placeholder="Your name" class="w-full rounded-lg px-3 py-2.5 text-sm">
-        <input id="custPhone" type="tel" placeholder="Phone number" class="w-full rounded-lg px-3 py-2.5 text-sm">
-        <textarea id="custAddress" placeholder="Delivery address" rows="2" class="w-full rounded-lg px-3 py-2.5 text-sm"></textarea>
+        <input id="custName" type="text" placeholder="Your name" class="w-full rounded-xl px-4 py-3 text-sm">
+        <input id="custPhone" type="tel" placeholder="Phone number" class="w-full rounded-xl px-4 py-3 text-sm">
+        <textarea id="custAddress" placeholder="Delivery address" rows="2" class="w-full rounded-xl px-4 py-3 text-sm"></textarea>
       </div>
-      <button onclick="CustomerApp.placeOrder()" class="btn-primary w-full rounded-xl py-3.5 font-semibold text-sm">
+      <button onclick="CustomerApp.placeOrder()" class="cart-fab text-white w-full rounded-2xl py-4 font-semibold text-sm">
         Place order · ${money(total)}
       </button>
-      <p id="checkoutError" class="text-xs text-center mt-2" style="color:var(--brick)"></p>
+      <p id="checkoutError" class="text-xs text-center mt-2" style="color:var(--brand)"></p>
     `;
   }
-function genOrderCode(){ return 'SNP-' + Math.floor(1000 + Math.random()*9000); }
+
+  function genOrderCode(){ return 'SNP-' + Math.floor(1000 + Math.random()*9000); }
 
   async function placeOrder(){
     const name = document.getElementById('custName').value.trim();
@@ -361,6 +473,11 @@ function genOrderCode(){ return 'SNP-' + Math.floor(1000 + Math.random()*9000); 
       errEl.textContent = 'Please fill in your name, phone and address.';
       return;
     }
+
+    // Open the tab NOW, while this is still a direct click — browsers block
+    // window.open() called after an await, so we reserve the tab first and
+    // point it at WhatsApp once the order details are ready below.
+    const waTab = window.open('', '_blank');
 
     const subtotal = cartSubtotal();
     const tax = subtotal * (settings.tax_percent/100);
@@ -405,18 +522,20 @@ function genOrderCode(){ return 'SNP-' + Math.floor(1000 + Math.random()*9000); 
     cart = [];
     renderCartBar();
     localStorage.setItem('snapit_tracking_order_id', order.id);
-    window.open(waUrl, '_blank');
+    localStorage.setItem('snapit_wa_url_' + order.id, waUrl);
+
+    if (waTab) { waTab.location.href = waUrl; }
 
     closeCart();
     trackOrder(order.id);
   }
 
   const STATUS_STEPS = [
-    { key: 'placed', label: 'Placed' },
-    { key: 'accepted', label: 'Accepted' },
-    { key: 'preparing', label: 'Preparing' },
-    { key: 'out_for_delivery', label: 'Out for delivery' },
-    { key: 'delivered', label: 'Delivered' }
+    { key: 'placed', label: 'Order placed', icon: '📝' },
+    { key: 'accepted', label: 'Accepted', icon: '✅' },
+    { key: 'preparing', label: 'Preparing', icon: '👨‍🍳' },
+    { key: 'out_for_delivery', label: 'Out for delivery', icon: '🛵' },
+    { key: 'delivered', label: 'Delivered', icon: '🎉' }
   ];
 
   async function trackOrder(orderId){
@@ -438,27 +557,41 @@ function genOrderCode(){ return 'SNP-' + Math.floor(1000 + Math.random()*9000); 
     const currentIndex = STATUS_STEPS.findIndex(s => s.key === order.order_status);
 
     const stepsHtml = cancelled
-      ? `<p class="text-center py-8" style="color:var(--brick)">This order was ${order.order_status}.</p>`
-      : `<div class="flex items-center mb-8">
-          ${STATUS_STEPS.map((s,i) => `
-            <div class="flex items-center ${i<STATUS_STEPS.length-1 ? 'flex-1':''}">
-              <div class="status-dot" style="background:${i<=currentIndex ? 'var(--olive)':'var(--line)'}"></div>
-              ${i<STATUS_STEPS.length-1 ? `<div class="flex-1 ${i<currentIndex ? 'status-line-done':'status-line'}"></div>` : ''}
-            </div>`).join('')}
-        </div>
-        <p class="font-display text-xl font-semibold mb-1">${STATUS_STEPS[currentIndex]?.label || 'Placed'}</p>
-        <p class="text-sm text-[var(--ink-soft)]">We'll update this automatically as your order moves along.</p>`;
+      ? `<div class="rounded-2xl p-6 text-center" style="background:var(--brand-tint)">
+          <p class="text-3xl mb-2">😕</p>
+          <p class="font-medium" style="color:var(--brand-dark)">This order was ${order.order_status}.</p>
+        </div>`
+      : STATUS_STEPS.map((s,i) => {
+          const done = i < currentIndex, active = i === currentIndex;
+          const bg = done ? 'var(--olive)' : active ? 'var(--brand)' : 'var(--paper-deep)';
+          const color = (done || active) ? '#fff' : 'var(--ink-soft)';
+          return `<div class="tl-row">
+            <div class="flex flex-col items-center">
+              <div class="tl-icon" style="background:${bg}; color:${color}">${s.icon}</div>
+              ${i<STATUS_STEPS.length-1 ? `<div class="tl-line ${i<currentIndex ? 'tl-line-done':''}"></div>` : ''}
+            </div>
+            <div class="pb-7 pt-1.5">
+              <p class="text-sm font-semibold ${active?'':'text-[var(--ink-soft)]'}">${s.label}</p>
+              ${active ? `<p class="text-xs text-[var(--ink-soft)] mt-0.5">Happening now</p>` : ''}
+            </div>
+          </div>`;
+        }).join('');
+
+    const waUrl = localStorage.getItem('snapit_wa_url_' + order.id);
+    const waButton = waUrl
+      ? `<a href="${waUrl}" target="_blank" class="block text-center rounded-xl py-3 text-sm font-semibold mb-6" style="background:#3F7E4E; color:#fff">
+           If WhatsApp didn't open, tap here to send your order
+         </a>`
+      : '';
 
     document.querySelector('#trackingView > div').innerHTML = `
-      <div class="flex items-center justify-between mb-6">
+      <div class="flex items-center justify-between mb-2">
         <h2 class="font-display text-2xl font-semibold">Order ${order.order_code}</h2>
         <button onclick="CustomerApp.closeTracking()" class="text-[var(--ink-soft)] text-2xl leading-none">&times;</button>
       </div>
-      ${stepsHtml}
-      <div class="mt-8 pt-4 border-t text-sm text-[var(--ink-soft)] space-y-1" style="border-color:var(--line)">
-        <p>Total: <span class="text-[var(--ink)] font-medium">${money(order.total_amount)}</span></p>
-        <p>Delivering to: ${order.delivery_address}</p>
-      </div>
+      <p class="text-sm text-[var(--ink-soft)] mb-6">Total ${money(order.total_amount)} · ${order.delivery_address}</p>
+      ${waButton}
+      <div>${stepsHtml}</div>
     `;
   }
 
@@ -468,9 +601,9 @@ function genOrderCode(){ return 'SNP-' + Math.floor(1000 + Math.random()*9000); 
     if (orderChannel){ sb.removeChannel(orderChannel); orderChannel = null; }
   }
 
-  return { init, loadMenuFor, setCategory, addToCart, changeQty, openCart, closeCart, placeOrder, closeTracking };
+  return { init, loadMenuFor, setCategory, setSearch, addToCart, changeQty, openCart, closeCart, placeOrder, closeTracking };
 })();
-/* =========================================================
+  /* =========================================================
    ADMIN APP — namespaced, lives behind the #admin route
    ========================================================= */
 const AdminApp = (function(){
@@ -479,7 +612,7 @@ const AdminApp = (function(){
   let restaurants = [];
   let ordersCache = [];
   let activeMenuRestaurantId = null;
-  let started = false; // guards against re-subscribing every time #admin is opened again
+  let started = false;
 
   async function checkPasscode(){
     const input = document.getElementById('passcodeInput').value.trim();
@@ -506,7 +639,7 @@ const AdminApp = (function(){
   }
 
   async function initDashboard(){
-    if (started) { await loadOrders(); return; } // already subscribed, just refresh
+    if (started) { await loadOrders(); return; }
     started = true;
     const { data: rests } = await sb.from('restaurants').select('*').order('sort_order');
     restaurants = rests || [];
@@ -521,8 +654,8 @@ const AdminApp = (function(){
   function switchTab(tab){
     document.getElementById('ordersTab').classList.toggle('hidden', tab!=='orders');
     document.getElementById('menuTab').classList.toggle('hidden', tab!=='menu');
-    document.getElementById('tabOrders').className = (tab==='orders'?'admin-tab-active':'admin-tab-inactive') + ' px-3 py-1.5 rounded-lg';
-    document.getElementById('tabMenu').className = (tab==='menu'?'admin-tab-active':'admin-tab-inactive') + ' px-3 py-1.5 rounded-lg';
+    document.getElementById('tabOrders').className = 'admin-seg-btn' + (tab==='orders' ? ' admin-seg-btn-active' : '');
+    document.getElementById('tabMenu').className = 'admin-seg-btn' + (tab==='menu' ? ' admin-seg-btn-active' : '');
   }
 
   async function loadOrders(){
@@ -544,6 +677,8 @@ const AdminApp = (function(){
 
   const STATUS_FLOW = ['placed','accepted','preparing','out_for_delivery','delivered'];
   const STATUS_LABEL = { placed:'Placed', accepted:'Accepted', preparing:'Preparing', out_for_delivery:'Out for delivery', delivered:'Delivered', rejected:'Rejected', cancelled:'Cancelled' };
+  const STATUS_COLOR = { placed:'var(--gold)', accepted:'var(--olive)', preparing:'var(--brand)', out_for_delivery:'var(--ink)', delivered:'var(--olive)', rejected:'var(--brand-dark)', cancelled:'var(--ink-soft)' };
+  const STATUS_BG    = { placed:'var(--gold-tint)', accepted:'var(--olive-tint)', preparing:'var(--brand-tint)', out_for_delivery:'var(--paper-deep)', delivered:'var(--olive-tint)', rejected:'var(--brand-tint)', cancelled:'var(--paper-deep)' };
 
   function renderOrders(){
     document.getElementById('ordersList').innerHTML = ordersCache.map(o => {
@@ -551,28 +686,33 @@ const AdminApp = (function(){
       const nextIndex = STATUS_FLOW.indexOf(o.order_status) + 1;
       const nextStatus = STATUS_FLOW[nextIndex];
       const isFinal = ['delivered','rejected','cancelled'].includes(o.order_status);
+      const color = STATUS_COLOR[o.order_status];
 
-      return `<div class="rounded-lg p-3" style="background:var(--card); border:1px solid var(--line)">
-        <div class="flex items-center justify-between mb-1">
-          <p class="font-semibold text-sm">${o.order_code} · ${restaurant?.name || ''}</p>
-          <span class="text-xs px-2 py-0.5 rounded-full" style="background:var(--paper); border:1px solid var(--line)">${STATUS_LABEL[o.order_status]}</span>
+      return `<div class="order-card" style="border-left-color:${color}">
+        <div class="flex items-center justify-between mb-1.5">
+          <p class="font-semibold text-sm">${o.order_code} <span class="text-[var(--ink-soft)] font-normal">· ${restaurant?.name || ''}</span></p>
+          <span class="status-pill" style="background:${STATUS_BG[o.order_status]}; color:${color}">${STATUS_LABEL[o.order_status]}</span>
         </div>
         <p class="text-xs text-[var(--ink-soft)] mb-1">${o.customer_name} · ${o.customer_phone}</p>
-        <p class="text-xs text-[var(--ink-soft)] mb-2">${o.delivery_address}</p>
-        <ul class="text-xs mb-2 space-y-0.5">
+        <p class="text-xs text-[var(--ink-soft)] mb-2.5">${o.delivery_address}</p>
+        <ul class="text-xs mb-3 space-y-0.5 text-[var(--ink)]">
           ${o.order_items.map(li => `<li>${li.quantity} × ${li.item_name}${li.portion!=='single'?` (${li.portion})`:''}</li>`).join('')}
         </ul>
-        <p class="text-sm font-semibold mb-2">${money(o.total_amount)}</p>
+        <p class="text-sm font-bold mb-3">${money(o.total_amount)}</p>
         <div class="flex gap-2 flex-wrap">
-          ${!isFinal && nextStatus ? `<button onclick="AdminApp.updateStatus('${o.id}','${nextStatus}')" class="btn-sm text-white" style="background:var(--olive)">Mark ${STATUS_LABEL[nextStatus]}</button>` : ''}
-          ${o.order_status==='placed' ? `<button onclick="AdminApp.updateStatus('${o.id}','rejected')" class="btn-sm" style="border:1px solid var(--brick); color:var(--brick)">Reject</button>` : ''}
-          ${!isFinal ? `<button onclick="AdminApp.updateStatus('${o.id}','cancelled')" class="btn-sm text-[var(--ink-soft)]" style="border:1px solid var(--line)">Cancel</button>` : ''}
+          ${!isFinal && nextStatus ? `<button onclick="AdminApp.updateStatus('${o.id}','${nextStatus}')" class="btn-sm text-white" style="background:var(--olive); font-size:12px; font-weight:600; padding:7px 14px; border-radius:999px;">Mark ${STATUS_LABEL[nextStatus]}</button>` : ''}
+          ${o.order_status==='placed' ? `<button onclick="AdminApp.updateStatus('${o.id}','rejected')" class="btn-sm" style="border:1.5px solid var(--brand); color:var(--brand); font-size:12px; font-weight:600; padding:6.5px 14px; border-radius:999px;">Reject</button>` : ''}
+          ${!isFinal ? `<button onclick="AdminApp.updateStatus('${o.id}','cancelled')" class="btn-sm text-[var(--ink-soft)]" style="border:1.5px solid var(--line); font-size:12px; font-weight:600; padding:6.5px 14px; border-radius:999px;">Cancel</button>` : ''}
         </div>
       </div>`;
     }).join('') || `<p class="text-sm text-[var(--ink-soft)] text-center py-10">No orders yet.</p>`;
   }
 
   async function updateStatus(orderId, status){
+    if (status === 'rejected' || status === 'cancelled'){
+      const ok = confirm(`Mark this order as ${status}? This can't be undone.`);
+      if (!ok) return;
+    }
     const { error } = await sb.from('orders').update({ order_status: status }).eq('id', orderId);
     if (error) console.error(error);
   }
@@ -603,10 +743,10 @@ const AdminApp = (function(){
   }
 
   function renderMenuRestaurantTabs(){
-    document.getElementById('menuRestaurantTabs').innerHTML = restaurants.map(r => `
-      <button onclick="AdminApp.setMenuRestaurant('${r.id}')" class="${r.id===activeMenuRestaurantId?'admin-tab-active':'admin-tab-inactive'} px-3 py-1.5 rounded-lg whitespace-nowrap">
+    document.getElementById('menuRestaurantTabs').innerHTML = `<div class="admin-seg-wrap">` + restaurants.map(r => `
+      <button onclick="AdminApp.setMenuRestaurant('${r.id}')" class="admin-seg-btn ${r.id===activeMenuRestaurantId?'admin-seg-btn-active':''}">
         ${r.name}
-      </button>`).join('');
+      </button>`).join('') + `</div>`;
   }
 
   function setMenuRestaurant(id){ activeMenuRestaurantId = id; renderMenuRestaurantTabs(); loadMenuAdmin(); }
@@ -618,18 +758,23 @@ const AdminApp = (function(){
 
     document.getElementById('menuAdminList').innerHTML = (cats||[]).map(cat => `
       <div class="mb-4">
-        <p class="font-display text-base font-semibold mb-1 mt-3">${cat.name}</p>
-        ${(menuItems||[]).filter(i=>i.category_id===cat.id).map(item => `
-          <div class="divider py-2 flex items-center justify-between">
-            <div>
-              <p class="text-sm ${item.is_available?'':'opacity-40'}">${item.name}</p>
-              <p class="text-xs text-[var(--ink-soft)]">${item.price_single!==null ? money(item.price_single) : `${money(item.price_half)} / ${money(item.price_full)}`}</p>
-            </div>
-            <button onclick="AdminApp.toggleAvailability('${item.id}', ${!item.is_available})"
-              class="toggle" style="background:${item.is_available?'var(--olive)':'var(--line)'}">
-              <div class="toggle-dot" style="left:${item.is_available?'18px':'2px'}"></div>
-            </button>
-          </div>`).join('')}
+        <p class="font-display text-base font-semibold mb-2 mt-4 flex items-center gap-1.5">${catEmoji(cat.name)} ${cat.name}</p>
+        <div class="space-y-2">
+          ${(menuItems||[]).filter(i=>i.category_id===cat.id).map(item => `
+            <div class="item-card !mb-0 !py-2.5 flex items-center justify-between">
+              <div class="flex items-start">
+                ${VEG}
+                <div>
+                  <p class="text-sm ${item.is_available?'':'opacity-40'}">${item.name}</p>
+                  <p class="text-xs text-[var(--ink-soft)] mt-0.5">${item.price_single!==null ? money(item.price_single) : `${money(item.price_half)} / ${money(item.price_full)}`}</p>
+                </div>
+              </div>
+              <button onclick="AdminApp.toggleAvailability('${item.id}', ${!item.is_available})"
+                class="toggle" style="background:${item.is_available?'var(--olive)':'var(--line)'}">
+                <div class="toggle-dot" style="left:${item.is_available?'19px':'2px'}"></div>
+              </button>
+            </div>`).join('')}
+        </div>
       </div>`).join('');
   }
 
@@ -641,7 +786,7 @@ const AdminApp = (function(){
 
   return { init, checkPasscode, switchTab, updateStatus, setMenuRestaurant, toggleAvailability };
 })();
-/* =========================================================
+  /* =========================================================
    ROUTING — plain URL = customer app, #admin = admin panel
    ========================================================= */
 function snapitRoute(){
