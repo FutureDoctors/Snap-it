@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>SnapIt — order from local favourites</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FBF6EC; --ink:#2A2118; --ink-soft:#6B5F4F;
+    --marigold:#E8A33D; --marigold-dark:#C7842A; --brick:#A63D33; --olive:#6E7F4B; --line:#E7DCC8; --card:#FFFFFF;
+  }
+  html,body{background:var(--paper); color:var(--ink); font-family:'Work Sans',sans-serif;}
+  .font-display{font-family:'Fraunces',serif;}
+  ::-webkit-scrollbar{display:none;}
+  * {scrollbar-width:none;}
+  .tab-active{ color:var(--ink); border-bottom:2px solid var(--brick); }
+  .tab-inactive{ color:var(--ink-soft); border-bottom:2px solid transparent; }
+  .chip{ border:1px solid var(--line); color:var(--ink-soft); }
+  .chip-active{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .qty-btn{ width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:1px solid var(--line); border-radius:6px; }
+  .divider{ border-bottom:1px solid var(--line); }
+  .btn-primary{ background:var(--brick); color:#fff; }
+  .btn-primary:active{ background:#8a3129; }
+  .status-dot{ width:10px; height:10px; border-radius:999px; }
+  .status-line{ height:2px; background:var(--line); }
+  .status-line-done{ height:2px; background:var(--olive); }
+  @keyframes slideUp{ from{ transform:translateY(100%);} to{ transform:translateY(0);} }
+  .sheet{ animation: slideUp 0.25s ease-out; }
+  input,textarea{ background:#fff; border:1px solid var(--line); }
+  input:focus,textarea:focus{ outline:none; border-color:var(--ink-soft); }
+  .hidden{ display:none !important; }
+  /* admin-only */
+  .admin-tab-active{ background:var(--ink); color:var(--paper); }
+  .admin-tab-inactive{ color:var(--ink-soft); }
+  .btn-sm{ font-size:12px; font-weight:600; padding:6px 12px; border-radius:8px; }
+  .toggle{ width:38px; height:22px; border-radius:999px; position:relative; transition:.15s; }
+  .toggle-dot{ width:18px; height:18px; border-radius:999px; background:#fff; position:absolute; top:2px; transition:.15s; }
+</style>
+</head>
+<body class="max-w-md mx-auto min-h-screen relative">
+
+<!-- =========================================================
+     CUSTOMER APP — shown at the plain URL (no #admin)
+     ========================================================= -->
+<div id="customerApp" class="pb-24">
+
+  <header class="sticky top-0 z-30 bg-[var(--paper)]/95 backdrop-blur border-b" style="border-color:var(--line)">
+    <div class="flex items-center justify-between px-4 pt-4 pb-2">
+      <h1 class="font-display text-2xl font-semibold tracking-tight">SnapIt<span style="color:var(--brick)">.</span></h1>
+    </div>
+    <div id="restaurantTabs" class="flex gap-6 px-4 text-sm font-medium overflow-x-auto whitespace-nowrap"></div>
+  </header>
+
+  <div id="categoryChips" class="flex gap-2 px-4 py-3 overflow-x-auto whitespace-nowrap text-sm"></div>
+
+  <main id="menuList" class="px-4 pb-6"></main>
+
+  <div id="cartBar" class="hidden fixed bottom-0 left-0 right-0 z-40">
+    <div class="max-w-md mx-auto px-4 pb-4">
+      <button onclick="CustomerApp.openCart()" class="btn-primary w-full rounded-xl py-3.5 px-4 flex items-center justify-between shadow-lg">
+        <span id="cartBarCount" class="text-sm font-semibold"></span>
+        <span class="text-sm font-medium">View cart →</span>
+        <span id="cartBarTotal" class="text-sm font-semibold"></span>
+      </button>
+    </div>
+  </div>
+
+  <div id="cartSheet" class="hidden fixed inset-0 z-50">
+    <div class="absolute inset-0 bg-black/40" onclick="CustomerApp.closeCart()"></div>
+    <div class="sheet absolute bottom-0 left-0 right-0 max-w-md mx-auto bg-[var(--card)] rounded-t-2xl max-h-[88vh] overflow-y-auto">
+      <div class="sticky top-0 bg-[var(--card)] px-5 pt-4 pb-3 border-b flex items-center justify-between" style="border-color:var(--line)">
+        <h2 class="font-display text-xl font-semibold">Your order</h2>
+        <button onclick="CustomerApp.closeCart()" class="text-[var(--ink-soft)] text-2xl leading-none">&times;</button>
+      </div>
+      <div id="sheetBody" class="p-5"></div>
+    </div>
+  </div>
+
+  <div id="trackingView" class="hidden fixed inset-0 z-50 bg-[var(--paper)] overflow-y-auto">
+    <div class="max-w-md mx-auto px-5 py-6"></div>
+  </div>
+
+</div>
+
+<!-- =========================================================
+     ADMIN APP — shown at yoursite.com/#admin
+     ========================================================= -->
+<div id="adminApp" class="hidden">
+
+  <div id="gate" class="min-h-screen flex flex-col items-center justify-center px-6">
+    <h1 class="font-display text-3xl font-semibold mb-6">SnapIt Admin</h1>
+    <input id="passcodeInput" type="password" placeholder="Admin passcode"
+      class="w-full max-w-xs border rounded-lg px-3 py-2.5 text-sm mb-3" style="border-color:var(--line)">
+    <button onclick="AdminApp.checkPasscode()" class="w-full max-w-xs rounded-lg py-2.5 text-sm font-semibold text-white" style="background:var(--brick)">
+      Enter
+    </button>
+    <p id="gateError" class="text-xs mt-2" style="color:var(--brick)"></p>
+  </div>
+
+  <div id="dashboard" class="hidden pb-16">
+    <header class="sticky top-0 z-20 bg-[var(--paper)]/95 backdrop-blur border-b px-4 pt-4 pb-2" style="border-color:var(--line)">
+      <h1 class="font-display text-2xl font-semibold mb-3">SnapIt Admin</h1>
+      <div class="flex gap-2 text-sm font-medium">
+        <button id="tabOrders" onclick="AdminApp.switchTab('orders')" class="admin-tab-active px-3 py-1.5 rounded-lg">Orders</button>
+        <button id="tabMenu" onclick="AdminApp.switchTab('menu')" class="admin-tab-inactive px-3 py-1.5 rounded-lg">Menu</button>
+      </div>
+    </header>
+
+    <section id="ordersTab" class="px-4 py-4">
+      <div class="grid grid-cols-3 gap-2 mb-4 text-center">
+        <div class="rounded-lg p-3" style="background:var(--card); border:1px solid var(--line)">
+          <p class="text-xs text-[var(--ink-soft)]">Today's orders</p>
+          <p id="statTodayCount" class="font-display text-xl font-semibold">0</p>
+        </div>
+        <div class="rounded-lg p-3" style="background:var(--card); border:1px solid var(--line)">
+          <p class="text-xs text-[var(--ink-soft)]">Today's sales</p>
+          <p id="statTodaySales" class="font-display text-xl font-semibold">₹0</p>
+        </div>
+        <div class="rounded-lg p-3" style="background:var(--card); border:1px solid var(--line)">
+          <p class="text-xs text-[var(--ink-soft)]">Active</p>
+          <p id="statActiveCount" class="font-display text-xl font-semibold">0</p>
+        </div>
+      </div>
+      <div id="ordersList" class="space-y-3"></div>
+    </section>
+
+    <section id="menuTab" class="px-4 py-4 hidden">
+      <div class="flex gap-2 mb-4 text-sm overflow-x-auto" id="menuRestaurantTabs"></div>
+      <div id="menuAdminList" class="space-y-1"></div>
+    </section>
+  </div>
+
+  <audio id="newOrderSound" preload="auto">
+    <source src="https://cdn.freesound.org/previews/536/536108_11937282-lq.mp3" type="audio/mpeg">
+  </audio>
+
+</div>
+
+<script>
+/* =========================================================
+   SUPABASE SETUP — one project, shared by both apps below
+   ========================================================= */
+const SUPABASE_URL = "https://jrakakvymmgvyquokcso.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpyYWtha3Z5bW1ndnlxdW9rY3NvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0MTY0ODYsImV4cCI6MjEwNDk5MjQ4Nn0.A37GvxOizrMcgkrQAAQTv-ZSFvFcAv17MtwuPOmiEB8";
+const money = n => `₹${Number(n).toFixed(0)}`;
+
+/* =========================================================
+   CUSTOMER APP — namespaced so it can't collide with AdminApp
+   ========================================================= */
+const CustomerApp = (function(){
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let restaurants = [];
+  let categories = [];
+  let items = [];
+  let activeRestaurantId = null;
+  let activeCategoryId = 'all';
+  let cart = [];
+  let settings = { delivery_fee: 20, tax_percent: 5 };
+  let orderChannel = null;
+
+  async function init(){
+    const { data: settingsRow } = await sb.from('settings').select('*').eq('id',1).single();
+    if (settingsRow) settings = settingsRow;
+
+    const { data: rests, error } = await sb.from('restaurants')
+      .select('*').eq('is_active', true).order('sort_order');
+    if (error) { console.error(error); return; }
+    restaurants = rests;
+    if (!restaurants.length) return;
+
+    activeRestaurantId = restaurants[0].id;
+    renderRestaurantTabs();
+    await loadMenuFor(activeRestaurantId);
+
+    const savedOrderId = localStorage.getItem('snapit_tracking_order_id');
+    if (savedOrderId) trackOrder(savedOrderId);
+  }
+
+  async function loadMenuFor(restaurantId){
+    activeRestaurantId = restaurantId;
+    activeCategoryId = 'all';
+    const { data: cats } = await sb.from('categories').select('*').eq('restaurant_id', restaurantId).order('sort_order');
+    const { data: menuItems } = await sb.from('menu_items').select('*').eq('restaurant_id', restaurantId).order('sort_order');
+    categories = cats || [];
+    items = menuItems || [];
+    renderRestaurantTabs();
+    renderCategoryChips();
+    renderMenuList();
+  }
+
+  function renderRestaurantTabs(){
+    document.getElementById('restaurantTabs').innerHTML = restaurants.map(r => `
+      <button onclick="CustomerApp.loadMenuFor('${r.id}')" class="py-2 ${r.id===activeRestaurantId ? 'tab-active':'tab-inactive'}">
+        ${r.name}
+      </button>`).join('');
+  }
+
+  function renderCategoryChips(){
+    const chips = ['<button onclick="CustomerApp.setCategory(\'all\')" class="chip px-3 py-1.5 rounded-full '+(activeCategoryId==='all'?'chip-active':'')+'">All</button>']
+      .concat(categories.map(c => `
+        <button onclick="CustomerApp.setCategory('${c.id}')" class="chip px-3 py-1.5 rounded-full ${activeCategoryId===c.id?'chip-active':''}">
+          ${c.name}
+        </button>`));
+    document.getElementById('categoryChips').innerHTML = chips.join('');
+  }
+
+  function setCategory(id){ activeCategoryId = id; renderCategoryChips(); renderMenuList(); }
+
+  function renderMenuList(){
+    const visible = items.filter(i => activeCategoryId==='all' || i.category_id===activeCategoryId);
+    const grouped = {};
+    visible.forEach(i => {
+      const cat = categories.find(c=>c.id===i.category_id);
+      const catName = cat ? cat.name : 'Other';
+      (grouped[catName] = grouped[catName] || []).push(i);
+    });
+
+    document.getElementById('menuList').innerHTML = Object.entries(grouped).map(([catName, catItems]) => `
+      <section class="mb-6">
+        <h3 class="font-display text-lg font-semibold mb-2 mt-4">${catName}</h3>
+        <div>${catItems.map(renderItemRow).join('')}</div>
+      </section>`).join('') || `<p class="text-[var(--ink-soft)] text-sm py-10 text-center">No items in this category yet.</p>`;
+  }
+
+  function renderItemRow(item){
+    if (!item.is_available){
+      return `<div class="divider py-3 flex items-center justify-between opacity-40">
+        <span class="text-sm">${item.name}</span>
+        <span class="text-xs">Out of stock</span>
+      </div>`;
+    }
+    if (item.price_single !== null){
+      const inCart = cart.find(c => c.menu_item_id===item.id && c.portion==='single');
+      return `<div class="divider py-3 flex items-center justify-between">
+        <div>
+          <p class="text-sm font-medium">${item.name}</p>
+          <p class="text-xs text-[var(--ink-soft)] mt-0.5">${money(item.price_single)}</p>
+        </div>
+        ${qtyControl(item, 'single', item.price_single, inCart)}
+      </div>`;
+    }
+    const half = cart.find(c => c.menu_item_id===item.id && c.portion==='half');
+    const full = cart.find(c => c.menu_item_id===item.id && c.portion==='full');
+    return `<div class="divider py-3">
+      <p class="text-sm font-medium mb-2">${item.name}</p>
+      <div class="flex flex-col gap-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-[var(--ink-soft)]">Half · ${money(item.price_half)}</span>
+          ${qtyControl(item, 'half', item.price_half, half)}
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-[var(--ink-soft)]">Full · ${money(item.price_full)}</span>
+          ${qtyControl(item, 'full', item.price_full, full)}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function qtyControl(item, portion, price, existing){
+    const key = `${item.id}_${portion}`;
+    if (!existing){
+      return `<button onclick="CustomerApp.addToCart('${item.id}','${escapeQ(item.name)}','${portion}',${price})"
+        class="text-xs font-semibold px-3 py-1.5 rounded-lg" style="border:1px solid var(--brick); color:var(--brick)">Add</button>`;
+    }
+    return `<div class="flex items-center gap-2">
+      <button class="qty-btn" onclick="CustomerApp.changeQty('${key}',-1)">−</button>
+      <span class="text-sm w-4 text-center">${existing.qty}</span>
+      <button class="qty-btn" onclick="CustomerApp.changeQty('${key}',1)">+</button>
+    </div>`;
+  }
+
+  function escapeQ(s){ return s.replace(/'/g, "\\'"); }
+
+  function addToCart(menu_item_id, name, portion, unit_price){
+    const key = `${menu_item_id}_${portion}`;
+    cart.push({ key, menu_item_id, name, portion, unit_price, qty: 1 });
+    renderMenuList();
+    renderCartBar();
+  }
+
+  function changeQty(key, delta){
+    const line = cart.find(c => c.key===key);
+    if (!line) return;
+    line.qty += delta;
+    if (line.qty <= 0) cart = cart.filter(c => c.key !== key);
+    renderMenuList();
+    renderCartBar();
+    if (!document.getElementById('cartSheet').classList.contains('hidden')) renderCartSheet();
+  }
+
+  function cartSubtotal(){ return cart.reduce((s,c)=> s + c.unit_price*c.qty, 0); }
+
+  function renderCartBar(){
+    const bar = document.getElementById('cartBar');
+    const count = cart.reduce((s,c)=>s+c.qty,0);
+    if (count === 0){ bar.classList.add('hidden'); return; }
+    bar.classList.remove('hidden');
+    document.getElementById('cartBarCount').textContent = `${count} item${count>1?'s':''}`;
+    document.getElementById('cartBarTotal').textContent = money(cartSubtotal());
+  }
+
+  function openCart(){
+    if (cart.length === 0) return;
+    renderCartSheet();
+    document.getElementById('cartSheet').classList.remove('hidden');
+  }
+  function closeCart(){ document.getElementById('cartSheet').classList.add('hidden'); }
+
+  function renderCartSheet(){
+    if (cart.length === 0){ closeCart(); return; }
+    const subtotal = cartSubtotal();
+    const tax = subtotal * (settings.tax_percent/100);
+    const total = subtotal + tax + Number(settings.delivery_fee);
+
+    document.getElementById('sheetBody').innerHTML = `
+      <div class="space-y-3 mb-5">
+        ${cart.map(c => `
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium">${c.name}${c.portion!=='single' ? ` <span class="text-xs text-[var(--ink-soft)]">(${c.portion})</span>`:''}</p>
+              <p class="text-xs text-[var(--ink-soft)]">${money(c.unit_price)} × ${c.qty}</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="qty-btn" onclick="CustomerApp.changeQty('${c.key}',-1)">−</button>
+              <span class="text-sm w-4 text-center">${c.qty}</span>
+              <button class="qty-btn" onclick="CustomerApp.changeQty('${c.key}',1)">+</button>
+            </div>
+          </div>`).join('')}
+      </div>
+      <div class="space-y-1.5 text-sm border-t pt-3 mb-5" style="border-color:var(--line)">
+        <div class="flex justify-between text-[var(--ink-soft)]"><span>Subtotal</span><span>${money(subtotal)}</span></div>
+        <div class="flex justify-between text-[var(--ink-soft)]"><span>Tax (${settings.tax_percent}%)</span><span>${money(tax)}</span></div>
+        <div class="flex justify-between text-[var(--ink-soft)]"><span>Delivery fee</span><span>${money(settings.delivery_fee)}</span></div>
+        <div class="flex justify-between font-semibold text-base pt-1"><span>Total</span><span>${money(total)}</span></div>
+      </div>
+      <div class="space-y-3 mb-5">
+        <input id="custName" type="text" placeholder="Your name" class="w-full rounded-lg px-3 py-2.5 text-sm">
+        <input id="custPhone" type="tel" placeholder="Phone number" class="w-full rounded-lg px-3 py-2.5 text-sm">
+        <textarea id="custAddress" placeholder="Delivery address" rows="2" class="w-full rounded-lg px-3 py-2.5 text-sm"></textarea>
+      </div>
+      <button onclick="CustomerApp.placeOrder()" class="btn-primary w-full rounded-xl py-3.5 font-semibold text-sm">
+        Place order · ${money(total)}
+      </button>
+      <p id="checkoutError" class="text-xs text-center mt-2" style="color:var(--brick)"></p>
+    `;
+  }
+function genOrderCode(){ return 'SNP-' + Math.floor(1000 + Math.random()*9000); }
+
+  async function placeOrder(){
+    const name = document.getElementById('custName').value.trim();
+    const phone = document.getElementById('custPhone').value.trim();
+    const address = document.getElementById('custAddress').value.trim();
+    const errEl = document.getElementById('checkoutError');
+
+    if (!name || !phone || !address){
+      errEl.textContent = 'Please fill in your name, phone and address.';
+      return;
+    }
+
+    const subtotal = cartSubtotal();
+    const tax = subtotal * (settings.tax_percent/100);
+    const total = subtotal + tax + Number(settings.delivery_fee);
+    const orderCode = genOrderCode();
+    const restaurant = restaurants.find(r => r.id === activeRestaurantId);
+
+    const { data: order, error: orderErr } = await sb.from('orders').insert({
+      order_code: orderCode,
+      restaurant_id: activeRestaurantId,
+      customer_name: name,
+      customer_phone: phone,
+      delivery_address: address,
+      subtotal, tax_amount: tax, delivery_fee: settings.delivery_fee, total_amount: total,
+      order_status: 'placed'
+    }).select().single();
+
+    if (orderErr){ errEl.textContent = 'Something went wrong placing your order. Please try again.'; console.error(orderErr); return; }
+
+    const orderItemRows = cart.map(c => ({
+      order_id: order.id, menu_item_id: c.menu_item_id, item_name: c.name,
+      portion: c.portion, unit_price: c.unit_price, quantity: c.qty, line_total: c.unit_price * c.qty
+    }));
+    await sb.from('order_items').insert(orderItemRows);
+
+    const lines = [
+      `*New SnapIt order — ${orderCode}*`,
+      `Restaurant: ${restaurant.name}`, ``,
+      ...cart.map(c => `${c.qty} × ${c.name}${c.portion!=='single' ? ` (${c.portion})`:''} — ${money(c.unit_price*c.qty)}`),
+      ``,
+      `Subtotal: ${money(subtotal)}`,
+      `Tax: ${money(tax)}`,
+      `Delivery: ${money(settings.delivery_fee)}`,
+      `*Total: ${money(total)}*`, ``,
+      `Customer: ${name}`, `Phone: ${phone}`, `Address: ${address}`
+    ];
+    const waText = encodeURIComponent(lines.join('\n'));
+    const waUrl = `https://wa.me/${restaurant.whatsapp_number}?text=${waText}`;
+
+    await sb.from('orders').update({ whatsapp_sent_status: true }).eq('id', order.id);
+
+    cart = [];
+    renderCartBar();
+    localStorage.setItem('snapit_tracking_order_id', order.id);
+    window.open(waUrl, '_blank');
+
+    closeCart();
+    trackOrder(order.id);
+  }
+
+  const STATUS_STEPS = [
+    { key: 'placed', label: 'Placed' },
+    { key: 'accepted', label: 'Accepted' },
+    { key: 'preparing', label: 'Preparing' },
+    { key: 'out_for_delivery', label: 'Out for delivery' },
+    { key: 'delivered', label: 'Delivered' }
+  ];
+
+  async function trackOrder(orderId){
+    const { data: order } = await sb.from('orders').select('*').eq('id', orderId).single();
+    if (!order){ localStorage.removeItem('snapit_tracking_order_id'); return; }
+
+    renderTracking(order);
+    document.getElementById('trackingView').classList.remove('hidden');
+
+    if (orderChannel) sb.removeChannel(orderChannel);
+    orderChannel = sb.channel(`order-${orderId}`)
+      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'orders', filter:`id=eq.${orderId}` },
+        payload => renderTracking(payload.new))
+      .subscribe();
+  }
+
+  function renderTracking(order){
+    const cancelled = ['rejected','cancelled'].includes(order.order_status);
+    const currentIndex = STATUS_STEPS.findIndex(s => s.key === order.order_status);
+
+    const stepsHtml = cancelled
+      ? `<p class="text-center py-8" style="color:var(--brick)">This order was ${order.order_status}.</p>`
+      : `<div class="flex items-center mb-8">
+          ${STATUS_STEPS.map((s,i) => `
+            <div class="flex items-center ${i<STATUS_STEPS.length-1 ? 'flex-1':''}">
+              <div class="status-dot" style="background:${i<=currentIndex ? 'var(--olive)':'var(--line)'}"></div>
+              ${i<STATUS_STEPS.length-1 ? `<div class="flex-1 ${i<currentIndex ? 'status-line-done':'status-line'}"></div>` : ''}
+            </div>`).join('')}
+        </div>
+        <p class="font-display text-xl font-semibold mb-1">${STATUS_STEPS[currentIndex]?.label || 'Placed'}</p>
+        <p class="text-sm text-[var(--ink-soft)]">We'll update this automatically as your order moves along.</p>`;
+
+    document.querySelector('#trackingView > div').innerHTML = `
+      <div class="flex items-center justify-between mb-6">
+        <h2 class="font-display text-2xl font-semibold">Order ${order.order_code}</h2>
+        <button onclick="CustomerApp.closeTracking()" class="text-[var(--ink-soft)] text-2xl leading-none">&times;</button>
+      </div>
+      ${stepsHtml}
+      <div class="mt-8 pt-4 border-t text-sm text-[var(--ink-soft)] space-y-1" style="border-color:var(--line)">
+        <p>Total: <span class="text-[var(--ink)] font-medium">${money(order.total_amount)}</span></p>
+        <p>Delivering to: ${order.delivery_address}</p>
+      </div>
+    `;
+  }
+
+  function closeTracking(){
+    document.getElementById('trackingView').classList.add('hidden');
+    localStorage.removeItem('snapit_tracking_order_id');
+    if (orderChannel){ sb.removeChannel(orderChannel); orderChannel = null; }
+  }
+
+  return { init, loadMenuFor, setCategory, addToCart, changeQty, openCart, closeCart, placeOrder, closeTracking };
+})();
+/* =========================================================
+   ADMIN APP — namespaced, lives behind the #admin route
+   ========================================================= */
+const AdminApp = (function(){
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let restaurants = [];
+  let ordersCache = [];
+  let activeMenuRestaurantId = null;
+  let started = false; // guards against re-subscribing every time #admin is opened again
+
+  async function checkPasscode(){
+    const input = document.getElementById('passcodeInput').value.trim();
+    const { data, error } = await sb.from('settings').select('admin_passcode').eq('id',1).single();
+    if (error || !data || data.admin_passcode !== input){
+      document.getElementById('gateError').textContent = 'Incorrect passcode.';
+      return;
+    }
+    sessionStorage.setItem('snapit_admin_ok', '1');
+    document.getElementById('gate').classList.add('hidden');
+    document.getElementById('dashboard').classList.remove('hidden');
+    initDashboard();
+  }
+
+  function init(){
+    if (sessionStorage.getItem('snapit_admin_ok') === '1'){
+      document.getElementById('gate').classList.add('hidden');
+      document.getElementById('dashboard').classList.remove('hidden');
+      initDashboard();
+    } else {
+      document.getElementById('gate').classList.remove('hidden');
+      document.getElementById('dashboard').classList.add('hidden');
+    }
+  }
+
+  async function initDashboard(){
+    if (started) { await loadOrders(); return; } // already subscribed, just refresh
+    started = true;
+    const { data: rests } = await sb.from('restaurants').select('*').order('sort_order');
+    restaurants = rests || [];
+    activeMenuRestaurantId = restaurants[0]?.id || null;
+
+    await loadOrders();
+    renderMenuRestaurantTabs();
+    await loadMenuAdmin();
+    subscribeRealtime();
+  }
+
+  function switchTab(tab){
+    document.getElementById('ordersTab').classList.toggle('hidden', tab!=='orders');
+    document.getElementById('menuTab').classList.toggle('hidden', tab!=='menu');
+    document.getElementById('tabOrders').className = (tab==='orders'?'admin-tab-active':'admin-tab-inactive') + ' px-3 py-1.5 rounded-lg';
+    document.getElementById('tabMenu').className = (tab==='menu'?'admin-tab-active':'admin-tab-inactive') + ' px-3 py-1.5 rounded-lg';
+  }
+
+  async function loadOrders(){
+    const { data, error } = await sb.from('orders').select('*, order_items(*)').order('created_at', { ascending:false }).limit(100);
+    if (error){ console.error(error); return; }
+    ordersCache = data;
+    renderOrders();
+    renderStats();
+  }
+
+  function renderStats(){
+    const todayStr = new Date().toDateString();
+    const today = ordersCache.filter(o => new Date(o.created_at).toDateString() === todayStr);
+    const active = ordersCache.filter(o => ['placed','accepted','preparing','out_for_delivery'].includes(o.order_status));
+    document.getElementById('statTodayCount').textContent = today.length;
+    document.getElementById('statTodaySales').textContent = money(today.reduce((s,o)=>s+Number(o.total_amount),0));
+    document.getElementById('statActiveCount').textContent = active.length;
+  }
+
+  const STATUS_FLOW = ['placed','accepted','preparing','out_for_delivery','delivered'];
+  const STATUS_LABEL = { placed:'Placed', accepted:'Accepted', preparing:'Preparing', out_for_delivery:'Out for delivery', delivered:'Delivered', rejected:'Rejected', cancelled:'Cancelled' };
+
+  function renderOrders(){
+    document.getElementById('ordersList').innerHTML = ordersCache.map(o => {
+      const restaurant = restaurants.find(r=>r.id===o.restaurant_id);
+      const nextIndex = STATUS_FLOW.indexOf(o.order_status) + 1;
+      const nextStatus = STATUS_FLOW[nextIndex];
+      const isFinal = ['delivered','rejected','cancelled'].includes(o.order_status);
+
+      return `<div class="rounded-lg p-3" style="background:var(--card); border:1px solid var(--line)">
+        <div class="flex items-center justify-between mb-1">
+          <p class="font-semibold text-sm">${o.order_code} · ${restaurant?.name || ''}</p>
+          <span class="text-xs px-2 py-0.5 rounded-full" style="background:var(--paper); border:1px solid var(--line)">${STATUS_LABEL[o.order_status]}</span>
+        </div>
+        <p class="text-xs text-[var(--ink-soft)] mb-1">${o.customer_name} · ${o.customer_phone}</p>
+        <p class="text-xs text-[var(--ink-soft)] mb-2">${o.delivery_address}</p>
+        <ul class="text-xs mb-2 space-y-0.5">
+          ${o.order_items.map(li => `<li>${li.quantity} × ${li.item_name}${li.portion!=='single'?` (${li.portion})`:''}</li>`).join('')}
+        </ul>
+        <p class="text-sm font-semibold mb-2">${money(o.total_amount)}</p>
+        <div class="flex gap-2 flex-wrap">
+          ${!isFinal && nextStatus ? `<button onclick="AdminApp.updateStatus('${o.id}','${nextStatus}')" class="btn-sm text-white" style="background:var(--olive)">Mark ${STATUS_LABEL[nextStatus]}</button>` : ''}
+          ${o.order_status==='placed' ? `<button onclick="AdminApp.updateStatus('${o.id}','rejected')" class="btn-sm" style="border:1px solid var(--brick); color:var(--brick)">Reject</button>` : ''}
+          ${!isFinal ? `<button onclick="AdminApp.updateStatus('${o.id}','cancelled')" class="btn-sm text-[var(--ink-soft)]" style="border:1px solid var(--line)">Cancel</button>` : ''}
+        </div>
+      </div>`;
+    }).join('') || `<p class="text-sm text-[var(--ink-soft)] text-center py-10">No orders yet.</p>`;
+  }
+
+  async function updateStatus(orderId, status){
+    const { error } = await sb.from('orders').update({ order_status: status }).eq('id', orderId);
+    if (error) console.error(error);
+  }
+
+  function subscribeRealtime(){
+    sb.channel('admin-orders')
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'orders' }, payload => {
+        playNewOrderSound();
+        notifyNewOrder(payload.new);
+        loadOrders();
+      })
+      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'orders' }, () => loadOrders())
+      .subscribe();
+  }
+
+  function playNewOrderSound(){
+    const audio = document.getElementById('newOrderSound');
+    audio.play().catch(()=>{});
+  }
+
+  function notifyNewOrder(order){
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'granted'){
+      new Notification('New SnapIt order', { body: `${order.order_code} · ${money(order.total_amount)}` });
+    } else if (Notification.permission !== 'denied'){
+      Notification.requestPermission();
+    }
+  }
+
+  function renderMenuRestaurantTabs(){
+    document.getElementById('menuRestaurantTabs').innerHTML = restaurants.map(r => `
+      <button onclick="AdminApp.setMenuRestaurant('${r.id}')" class="${r.id===activeMenuRestaurantId?'admin-tab-active':'admin-tab-inactive'} px-3 py-1.5 rounded-lg whitespace-nowrap">
+        ${r.name}
+      </button>`).join('');
+  }
+
+  function setMenuRestaurant(id){ activeMenuRestaurantId = id; renderMenuRestaurantTabs(); loadMenuAdmin(); }
+
+  async function loadMenuAdmin(){
+    if (!activeMenuRestaurantId) return;
+    const { data: cats } = await sb.from('categories').select('*').eq('restaurant_id', activeMenuRestaurantId).order('sort_order');
+    const { data: menuItems } = await sb.from('menu_items').select('*').eq('restaurant_id', activeMenuRestaurantId).order('sort_order');
+
+    document.getElementById('menuAdminList').innerHTML = (cats||[]).map(cat => `
+      <div class="mb-4">
+        <p class="font-display text-base font-semibold mb-1 mt-3">${cat.name}</p>
+        ${(menuItems||[]).filter(i=>i.category_id===cat.id).map(item => `
+          <div class="divider py-2 flex items-center justify-between">
+            <div>
+              <p class="text-sm ${item.is_available?'':'opacity-40'}">${item.name}</p>
+              <p class="text-xs text-[var(--ink-soft)]">${item.price_single!==null ? money(item.price_single) : `${money(item.price_half)} / ${money(item.price_full)}`}</p>
+            </div>
+            <button onclick="AdminApp.toggleAvailability('${item.id}', ${!item.is_available})"
+              class="toggle" style="background:${item.is_available?'var(--olive)':'var(--line)'}">
+              <div class="toggle-dot" style="left:${item.is_available?'18px':'2px'}"></div>
+            </button>
+          </div>`).join('')}
+      </div>`).join('');
+  }
+
+  async function toggleAvailability(itemId, newValue){
+    const { error } = await sb.from('menu_items').update({ is_available: newValue }).eq('id', itemId);
+    if (error) console.error(error);
+    loadMenuAdmin();
+  }
+
+  return { init, checkPasscode, switchTab, updateStatus, setMenuRestaurant, toggleAvailability };
+})();
+/* =========================================================
+   ROUTING — plain URL = customer app, #admin = admin panel
+   ========================================================= */
+function snapitRoute(){
+  const isAdmin = location.hash === '#admin';
+  document.getElementById('customerApp').classList.toggle('hidden', isAdmin);
+  document.getElementById('adminApp').classList.toggle('hidden', !isAdmin);
+  if (isAdmin) AdminApp.init(); else CustomerApp.init();
+}
+window.addEventListener('hashchange', snapitRoute);
+snapitRoute();
+</script>
+</body>
+</html>
