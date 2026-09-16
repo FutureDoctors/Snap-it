@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -107,8 +107,7 @@
 </style>
 </head>
 <body class="max-w-md mx-auto min-h-screen relative">
-
-  <!-- =========================================================
+ <!-- =========================================================
      CUSTOMER APP — shown at the plain URL (no #admin)
      ========================================================= -->
 <div id="customerApp" class="pb-28">
@@ -151,7 +150,7 @@
       <h2 class="font-display text-[27px] leading-tight font-semibold mb-3" style="color:var(--paper)">
         Cravings हैं? <span style="color:var(--gold)">SnapIt</span> करो
       </h2>
-      <p class="text-sm mb-6" style="color:rgba(251,243,231,.7)">Fresh food!! You think , we'll deliver 😋.</p>
+      <p class="text-sm mb-6" style="color:rgba(251,243,231,.7)">Fresh food, seedha WhatsApp par order — no app, no login.</p>
       <button onclick="document.getElementById('menuSection').scrollIntoView({behavior:'smooth'})"
         class="rounded-full px-8 py-3 text-sm font-bold" style="background:var(--gold); color:var(--ink)">
         Menu Dekho
@@ -314,7 +313,7 @@
 </div>
 
 <script>
-  /* =========================================================
+ /* =========================================================
    SUPABASE SETUP — one project, shared by both apps below
    ========================================================= */
 const SUPABASE_URL = "https://jrakakvymmgvyquokcso.supabase.co";
@@ -430,6 +429,7 @@ const CustomerApp = (function(){
       </button>`;
     }).join('');
   }
+
   function renderRestaurantTabs(){
     document.getElementById('restaurantTabs').innerHTML = restaurants.map(r => `
       <button onclick="CustomerApp.loadMenuFor('${r.id}')" class="seg-btn ${r.id===activeRestaurantId ? 'seg-btn-active':''}">
@@ -519,9 +519,8 @@ const CustomerApp = (function(){
         </div>
       </div>
     </div>`;
-  }
-
-  function qtyControl(item, portion, price, existing){
+        }
+ function qtyControl(item, portion, price, existing){
     const key = `${item.id}_${portion}`;
     if (!existing){
       return `<button onclick="CustomerApp.addToCart('${item.id}','${escapeQ(item.name)}','${portion}',${price})" class="add-btn">ADD</button>`;
@@ -670,19 +669,19 @@ const CustomerApp = (function(){
     if (totalItems < minItems){
       errEl.textContent = `Minimum order is ${minItems} items.`;
       return;
-                           }
-
-  // Reserve a tab NOW, while this is still a direct click — browsers block
-    // window.open() called after an await. Only the first restaurant's chat
-    // can be auto-opened this way; any others get a tap-to-send button on
-    // the tracking screen instead.
+       }
+   // Reserve a tab NOW, while this is still a direct click — browsers block
+    // window.open() called after an await.
     const waTab = window.open('', '_blank');
 
     const groupId = crypto.randomUUID();
     const groups = groupCartByRestaurant();
     const groupEntries = Object.entries(groups);
-    const placedOrders = [];
+    const placedAt = new Date();
+    const orderResults = [];
 
+    // 1. Create one DB order (+ its items) per cafe — each cafe still gets
+    //    its own independent status/tracking, even when messages get merged below.
     for (let i = 0; i < groupEntries.length; i++){
       const [restId, group] = groupEntries[i];
       const restaurant = restaurants.find(r => r.id === restId);
@@ -691,7 +690,6 @@ const CustomerApp = (function(){
       const deliveryForThis = i === 0 ? Number(settings.delivery_fee) : 0;
       const total = subtotal + tax + deliveryForThis;
       const orderCode = genOrderCode();
-      const placedAt = new Date();
 
       const { data: order, error: orderErr } = await sb.from('orders').insert({
         order_code: orderCode,
@@ -713,33 +711,55 @@ const CustomerApp = (function(){
       }));
       await sb.from('order_items').insert(orderItemRows);
 
-      const lines = [
-        `*New SnapIt order — ${orderCode}*`,
-        `Restaurant: ${restaurant.name}`,
-        `Placed: ${placedAt.toLocaleString('en-IN')}`, ``,
-        ...group.items.map(c => `${c.qty} × ${c.name}${c.portion!=='single' ? ` (${c.portion})`:''} — ${money(c.unit_price*c.qty)}`),
-        ``,
-        `Subtotal: ${money(subtotal)}`,
-        `Tax: ${money(tax)}`,
-        `Delivery: ${deliveryForThis > 0 ? money(deliveryForThis) : 'Included with other order'}`,
-        `*Total: ${money(total)}*`, ``,
-        `Customer: ${name}`, `Phone: ${phone}`, `Address: ${address}`,
-        ...(notes ? [`Notes: ${notes}`] : [])
-      ];
-      const waText = encodeURIComponent(lines.join('\n'));
-      const waUrl = `https://wa.me/${restaurant.whatsapp_number}?text=${waText}`;
-
-      await sb.from('orders').update({ whatsapp_sent_status: true }).eq('id', order.id);
-      localStorage.setItem('snapit_wa_url_' + order.id, waUrl);
-      placedOrders.push({ id: order.id, waUrl });
+      orderResults.push({ restaurant, group, order, orderCode, subtotal, tax, deliveryForThis, total });
     }
 
-    if (waTab && placedOrders[0]) { waTab.location.href = placedOrders[0].waUrl; }
+    // 2. Group by WhatsApp number — cafes sharing a number get ONE combined
+    //    message (one click, everything included); different numbers still
+    //    get their own message with a tap-to-send fallback on tracking.
+    const byNumber = {};
+    orderResults.forEach(r => {
+      (byNumber[r.restaurant.whatsapp_number] = byNumber[r.restaurant.whatsapp_number] || []).push(r);
+    });
+
+    const waSends = [];
+    for (const [number, group] of Object.entries(byNumber)){
+      const multi = group.length > 1;
+      const lines = [
+        `*New SnapIt order — ${group.map(r=>r.orderCode).join(', ')}*`,
+        `Placed: ${placedAt.toLocaleString('en-IN')}`, ``
+      ];
+      let grandTotal = 0;
+      group.forEach(r => {
+        if (multi) lines.push(`*${r.restaurant.name}* (Order ${r.orderCode})`);
+        else lines.push(`Restaurant: ${r.restaurant.name}`);
+        lines.push(...r.group.items.map(c => `${c.qty} × ${c.name}${c.portion!=='single' ? ` (${c.portion})`:''} — ${money(c.unit_price*c.qty)}`));
+        lines.push(
+          `Subtotal: ${money(r.subtotal)}`,
+          `Tax: ${money(r.tax)}`,
+          `Delivery: ${r.deliveryForThis > 0 ? money(r.deliveryForThis) : (multi ? 'Included above' : 'Included with other order')}`,
+          `Total: ${money(r.total)}`, ``
+        );
+        grandTotal += r.total;
+      });
+      if (multi) lines.push(`*Grand total: ${money(grandTotal)}*`, ``);
+      lines.push(`Customer: ${name}`, `Phone: ${phone}`, `Address: ${address}`);
+      if (notes) lines.push(`Notes: ${notes}`);
+
+      const waText = encodeURIComponent(lines.join('\n'));
+      const waUrl = `https://wa.me/${number}?text=${waText}`;
+      waSends.push({ url: waUrl, orderIds: group.map(r => r.order.id) });
+    }
+
+    waSends.forEach(send => send.orderIds.forEach(oid => localStorage.setItem('snapit_wa_url_' + oid, send.url)));
+    await Promise.all(orderResults.map(r => sb.from('orders').update({ whatsapp_sent_status: true }).eq('id', r.order.id)));
+
+    if (waTab && waSends[0]) { waTab.location.href = waSends[0].url; }
     else if (waTab) { waTab.close(); }
 
     cart = [];
     renderCartBar();
-    const orderIds = placedOrders.map(o => o.id);
+    const orderIds = orderResults.map(r => r.order.id);
 
     closeCart();
     trackOrders(orderIds, { openView: true });
@@ -782,8 +802,7 @@ const CustomerApp = (function(){
         .subscribe()
     );
   }
-
-  function renderFloatingTracker(){
+ function renderFloatingTracker(){
     const pill = document.getElementById('floatingTracker');
     const liveOnes = activeOrders.filter(o => !isOrderFinal(o));
     if (liveOnes.length === 0){ pill.classList.add('hidden'); return; }
@@ -833,6 +852,7 @@ const CustomerApp = (function(){
       updateTrackingBlock(order);
     });
   }
+
   function updateTrackingBlock(order){
     const block = document.getElementById(`trackBlock-${order.id}`);
     if (!block) return;
@@ -860,8 +880,8 @@ const CustomerApp = (function(){
             </div>
           </div>`;
         }).join('');
-
-    const waUrl = localStorage.getItem('snapit_wa_url_' + order.id);
+   
+   const waUrl = localStorage.getItem('snapit_wa_url_' + order.id);
     const waButton = waUrl
       ? `<a href="${waUrl}" target="_blank" class="block text-center rounded-xl py-3 text-sm font-semibold mb-6" style="background:#3F7E4E; color:#fff">
            If WhatsApp didn't open, tap here to send this order
@@ -987,7 +1007,8 @@ const AdminApp = (function(){
         </button>`));
     document.getElementById('ordersCafeChips').innerHTML = chips.join('');
   }
-async function loadOrders(){
+
+  async function loadOrders(){
     let query = sb.from('orders').select('*, order_items(*)').order('created_at', { ascending:false }).limit(300);
     const start = rangeStart(ordersRange);
     if (start) query = query.gte('created_at', start.toISOString());
@@ -1131,9 +1152,8 @@ async function loadOrders(){
       <button onclick="AdminApp.setMenuRestaurant('${r.id}')" class="admin-seg-btn ${r.id===activeMenuRestaurantId?'admin-seg-btn-active':''}">
         ${r.name}
       </button>`).join('') + `</div>`;
-  }
-
-  function setMenuRestaurant(id){ activeMenuRestaurantId = id; renderMenuRestaurantTabs(); loadMenuAdmin(); }
+           }
+ function setMenuRestaurant(id){ activeMenuRestaurantId = id; renderMenuRestaurantTabs(); loadMenuAdmin(); }
 
   async function loadMenuAdmin(){
     if (!activeMenuRestaurantId) return;
@@ -1168,6 +1188,7 @@ async function loadOrders(){
         </div>
       </div>`).join('');
   }
+
   async function toggleAvailability(itemId, newValue){
     const { error } = await sb.from('menu_items').update({ is_available: newValue }).eq('id', itemId);
     if (error) console.error(error);
@@ -1249,9 +1270,8 @@ async function loadOrders(){
       buckets.push({ label, total });
     }
     return buckets;
-  }
-
-  async function loadWeeklyReport(){
+ }
+ async function loadWeeklyReport(){
     const start = addDays(startOfDay(new Date()), -7*7);
     const { data } = await sb.from('orders').select('total_amount, created_at, order_status').gte('created_at', start.toISOString());
     const valid = (data||[]).filter(o => !['rejected','cancelled'].includes(o.order_status));
@@ -1345,8 +1365,7 @@ async function loadOrders(){
 
   return { init, checkPasscode, switchTab, updateStatus, setMenuRestaurant, toggleAvailability, togglePopular, openEditItem, closeEditItem, saveItemEdit, setOrdersRange, setOrdersCafe, setReportMode, autoMarkPopular, deleteOrder, cleanupOldOrders };
 })();
-
-/* =========================================================
+ /* =========================================================
    ROUTING — plain URL = customer app, #admin = admin panel
    ========================================================= */
 function snapitRoute(){
@@ -1361,4 +1380,5 @@ snapitRoute();
 </body>
 </html>
 
-                  
+
+ 
