@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -108,7 +108,7 @@
 </head>
 <body class="max-w-md mx-auto min-h-screen relative">
 
-<!-- =========================================================
+  <!-- =========================================================
      CUSTOMER APP — shown at the plain URL (no #admin)
      ========================================================= -->
 <div id="customerApp" class="pb-28">
@@ -135,6 +135,10 @@
     <div class="px-4 pb-3">
       <div id="restaurantTabs" class="seg-wrap"></div>
     </div>
+    <div id="floatingTracker" class="hidden mx-4 mb-3 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-2 cursor-pointer" style="background:rgba(217,164,65,.15); border:1px solid rgba(217,164,65,.35)" onclick="CustomerApp.openTrackingView()">
+      <p id="floatingTrackerText" class="text-xs leading-snug" style="color:var(--gold)"></p>
+      <span class="text-xs font-bold whitespace-nowrap" style="color:var(--gold)">Track →</span>
+    </div>
   </header>
 
   <section class="hero px-6 pt-9 pb-10">
@@ -147,10 +151,10 @@
       <h2 class="font-display text-[27px] leading-tight font-semibold mb-3" style="color:var(--paper)">
         Cravings हैं? <span style="color:var(--gold)">SnapIt</span> करो
       </h2>
-      <p class="text-sm mb-6" style="color:rgba(251,243,231,.7)">Fresh food, You think , We deliver </p>
+      <p class="text-sm mb-6" style="color:rgba(251,243,231,.7)">Fresh food, seedha WhatsApp par order — no app, no login.</p>
       <button onclick="document.getElementById('menuSection').scrollIntoView({behavior:'smooth'})"
         class="rounded-full px-8 py-3 text-sm font-bold" style="background:var(--gold); color:var(--ink)">
-        Access Menu
+        Menu Dekho
       </button>
     </div>
   </section>
@@ -227,17 +231,23 @@
       <div class="admin-seg-wrap">
         <button id="tabOrders" onclick="AdminApp.switchTab('orders')" class="admin-seg-btn admin-seg-btn-active">Orders</button>
         <button id="tabMenu" onclick="AdminApp.switchTab('menu')" class="admin-seg-btn">Menu</button>
+        <button id="tabReports" onclick="AdminApp.switchTab('reports')" class="admin-seg-btn">Reports</button>
       </div>
     </header>
 
     <section id="ordersTab" class="px-4 py-4">
+      <div class="flex gap-2 mb-2 text-xs overflow-x-auto" id="ordersRangeChips"></div>
+      <div class="flex gap-2 mb-3 text-xs overflow-x-auto" id="ordersCafeChips"></div>
+      <div class="flex justify-end mb-3">
+        <button onclick="AdminApp.cleanupOldOrders()" class="text-xs font-semibold px-3 py-1.5 rounded-full" style="border:1.5px solid var(--line); color:var(--ink-soft)">🗑 Clear old completed orders</button>
+      </div>
       <div class="grid grid-cols-3 gap-2.5 mb-5">
         <div class="stat-card text-center">
-          <p class="text-[11px] text-[var(--ink-soft)] mb-0.5">Today's orders</p>
+          <p id="statOrdersLabel" class="text-[11px] text-[var(--ink-soft)] mb-0.5">Today's orders</p>
           <p id="statTodayCount" class="font-display text-2xl font-semibold" style="color:var(--gold-dark)">0</p>
         </div>
         <div class="stat-card text-center">
-          <p class="text-[11px] text-[var(--ink-soft)] mb-0.5">Today's sales</p>
+          <p id="statSalesLabel" class="text-[11px] text-[var(--ink-soft)] mb-0.5">Today's sales</p>
           <p id="statTodaySales" class="font-display text-2xl font-semibold" style="color:var(--ink)">₹0</p>
         </div>
         <div class="stat-card text-center">
@@ -251,6 +261,23 @@
     <section id="menuTab" class="px-4 py-4 hidden">
       <div class="flex gap-2 mb-4 text-sm overflow-x-auto" id="menuRestaurantTabs"></div>
       <div id="menuAdminList" class="space-y-1"></div>
+    </section>
+
+    <section id="reportsTab" class="px-4 py-4 hidden">
+      <div class="admin-seg-wrap mb-4">
+        <button id="reportModeDaily" onclick="AdminApp.setReportMode('daily')" class="admin-seg-btn admin-seg-btn-active">Last 7 days</button>
+        <button id="reportModeWeekly" onclick="AdminApp.setReportMode('weekly')" class="admin-seg-btn">Last 8 weeks</button>
+      </div>
+      <div class="stat-card mb-5">
+        <p class="text-[11px] text-[var(--ink-soft)] mb-1">Sales in this period</p>
+        <p id="reportTotal" class="font-display text-2xl font-semibold mb-4" style="color:var(--ink)">₹0</p>
+        <div id="reportChart"></div>
+      </div>
+      <div class="flex items-center justify-between mb-3">
+        <p class="font-display text-base font-semibold">🏆 Top selling items</p>
+        <button onclick="AdminApp.autoMarkPopular()" class="text-xs font-semibold px-3 py-1.5 rounded-full" style="border:1.5px solid var(--gold-dark); color:var(--gold-dark)">⭐ Auto-mark top 3</button>
+      </div>
+      <div id="reportTopItems" class="stat-card"></div>
     </section>
   </div>
 
@@ -287,7 +314,7 @@
 </div>
 
 <script>
-/* =========================================================
+  /* =========================================================
    SUPABASE SETUP — one project, shared by both apps below
    ========================================================= */
 const SUPABASE_URL = "https://jrakakvymmgvyquokcso.supabase.co";
@@ -337,6 +364,7 @@ const CustomerApp = (function(){
   let cart = [];          // shared across restaurants — each line item carries its own restaurant_id
   let settings = { delivery_fee: 20, tax_percent: 5, min_items: 1 };
   let trackingChannels = [];
+  let activeOrders = [];
 
   async function init(){
     const { data: settingsRow } = await sb.from('settings').select('*').eq('id',1).single();
@@ -354,7 +382,7 @@ const CustomerApp = (function(){
 
     const savedOrderIds = localStorage.getItem('snapit_tracking_order_ids');
     if (savedOrderIds){
-      try { trackOrders(JSON.parse(savedOrderIds)); } catch(e){}
+      try { trackOrders(JSON.parse(savedOrderIds), { openView: false }); } catch(e){}
     }
   }
 
@@ -402,7 +430,6 @@ const CustomerApp = (function(){
       </button>`;
     }).join('');
   }
-
   function renderRestaurantTabs(){
     document.getElementById('restaurantTabs').innerHTML = restaurants.map(r => `
       <button onclick="CustomerApp.loadMenuFor('${r.id}')" class="seg-btn ${r.id===activeRestaurantId ? 'seg-btn-active':''}">
@@ -536,7 +563,8 @@ const CustomerApp = (function(){
     });
     return groups;
   }
- function cartSubtotal(){ return cart.reduce((s,c)=> s + c.unit_price*c.qty, 0); }
+
+  function cartSubtotal(){ return cart.reduce((s,c)=> s + c.unit_price*c.qty, 0); }
 
   function renderCartBar(){
     const bar = document.getElementById('cartBar');
@@ -612,6 +640,7 @@ const CustomerApp = (function(){
         <input id="custName" type="text" placeholder="Your name" class="w-full rounded-xl px-4 py-3 text-sm">
         <input id="custPhone" type="tel" placeholder="Phone number" class="w-full rounded-xl px-4 py-3 text-sm">
         <textarea id="custAddress" placeholder="Delivery address" rows="2" class="w-full rounded-xl px-4 py-3 text-sm"></textarea>
+        <textarea id="custNotes" placeholder="Any notes for the cafe (optional)" rows="2" class="w-full rounded-xl px-4 py-3 text-sm"></textarea>
       </div>
       <button onclick="CustomerApp.placeOrder()" ${belowMin ? 'disabled' : ''}
         class="cart-fab w-full rounded-2xl py-4 font-semibold text-sm ${belowMin ? 'opacity-40' : ''}">
@@ -628,6 +657,7 @@ const CustomerApp = (function(){
     const name = document.getElementById('custName').value.trim();
     const phone = document.getElementById('custPhone').value.trim();
     const address = document.getElementById('custAddress').value.trim();
+    const notes = document.getElementById('custNotes').value.trim();
     const errEl = document.getElementById('checkoutError');
 
     if (!name || !phone || !address){
@@ -640,14 +670,15 @@ const CustomerApp = (function(){
     if (totalItems < minItems){
       errEl.textContent = `Minimum order is ${minItems} items.`;
       return;
-    }
+                           }
 
-    // Reserve a tab NOW, while this is still a direct click — browsers block
+  // Reserve a tab NOW, while this is still a direct click — browsers block
     // window.open() called after an await. Only the first restaurant's chat
     // can be auto-opened this way; any others get a tap-to-send button on
     // the tracking screen instead.
     const waTab = window.open('', '_blank');
 
+    const groupId = crypto.randomUUID();
     const groups = groupCartByRestaurant();
     const groupEntries = Object.entries(groups);
     const placedOrders = [];
@@ -660,13 +691,16 @@ const CustomerApp = (function(){
       const deliveryForThis = i === 0 ? Number(settings.delivery_fee) : 0;
       const total = subtotal + tax + deliveryForThis;
       const orderCode = genOrderCode();
+      const placedAt = new Date();
 
       const { data: order, error: orderErr } = await sb.from('orders').insert({
         order_code: orderCode,
+        group_id: groupId,
         restaurant_id: restId,
         customer_name: name,
         customer_phone: phone,
         delivery_address: address,
+        notes: notes || null,
         subtotal, tax_amount: tax, delivery_fee: deliveryForThis, total_amount: total,
         order_status: 'placed'
       }).select().single();
@@ -681,14 +715,16 @@ const CustomerApp = (function(){
 
       const lines = [
         `*New SnapIt order — ${orderCode}*`,
-        `Restaurant: ${restaurant.name}`, ``,
+        `Restaurant: ${restaurant.name}`,
+        `Placed: ${placedAt.toLocaleString('en-IN')}`, ``,
         ...group.items.map(c => `${c.qty} × ${c.name}${c.portion!=='single' ? ` (${c.portion})`:''} — ${money(c.unit_price*c.qty)}`),
         ``,
         `Subtotal: ${money(subtotal)}`,
         `Tax: ${money(tax)}`,
         `Delivery: ${deliveryForThis > 0 ? money(deliveryForThis) : 'Included with other order'}`,
         `*Total: ${money(total)}*`, ``,
-        `Customer: ${name}`, `Phone: ${phone}`, `Address: ${address}`
+        `Customer: ${name}`, `Phone: ${phone}`, `Address: ${address}`,
+        ...(notes ? [`Notes: ${notes}`] : [])
       ];
       const waText = encodeURIComponent(lines.join('\n'));
       const waUrl = `https://wa.me/${restaurant.whatsapp_number}?text=${waText}`;
@@ -704,10 +740,9 @@ const CustomerApp = (function(){
     cart = [];
     renderCartBar();
     const orderIds = placedOrders.map(o => o.id);
-    localStorage.setItem('snapit_tracking_order_ids', JSON.stringify(orderIds));
 
     closeCart();
-    trackOrders(orderIds);
+    trackOrders(orderIds, { openView: true });
   }
 
   const STATUS_STEPS = [
@@ -718,21 +753,67 @@ const CustomerApp = (function(){
     { key: 'delivered', label: 'Delivered', icon: '🎉' }
   ];
 
-  async function trackOrders(orderIds){
+  function isOrderFinal(order){ return ['delivered','rejected','cancelled'].includes(order.order_status); }
+
+  async function trackOrders(orderIds, { openView } = {}){
     if (!orderIds || orderIds.length === 0) return;
     const { data: orders } = await sb.from('orders').select('*').in('id', orderIds);
-    if (!orders || orders.length === 0){ localStorage.removeItem('snapit_tracking_order_ids'); return; }
+    if (!orders || orders.length === 0){ clearTracking(); return; }
 
-    document.getElementById('trackingView').classList.remove('hidden');
-    renderTrackingAll(orders);
+    activeOrders = orders;
+    localStorage.setItem('snapit_tracking_order_ids', JSON.stringify(orders.map(o=>o.id)));
+    renderFloatingTracker();
+    if (openView) openTrackingView();
+    subscribeTrackingRealtime();
+  }
 
+  function subscribeTrackingRealtime(){
     trackingChannels.forEach(ch => sb.removeChannel(ch));
-    trackingChannels = orders.map(order =>
+    trackingChannels = activeOrders.map(order =>
       sb.channel(`order-${order.id}`)
         .on('postgres_changes', { event:'UPDATE', schema:'public', table:'orders', filter:`id=eq.${order.id}` },
-          payload => updateTrackingBlock(payload.new))
+          payload => {
+            const idx = activeOrders.findIndex(o => o.id === payload.new.id);
+            if (idx > -1) activeOrders[idx] = payload.new;
+            renderFloatingTracker();
+            if (!document.getElementById('trackingView').classList.contains('hidden')) renderTrackingAll(activeOrders);
+            if (activeOrders.length > 0 && activeOrders.every(isOrderFinal)) clearTracking();
+          })
         .subscribe()
     );
+  }
+
+  function renderFloatingTracker(){
+    const pill = document.getElementById('floatingTracker');
+    const liveOnes = activeOrders.filter(o => !isOrderFinal(o));
+    if (liveOnes.length === 0){ pill.classList.add('hidden'); return; }
+    pill.classList.remove('hidden');
+    const codes = liveOnes.map(o => o.order_code).join(', ');
+    const label = liveOnes.length === 1
+      ? (STATUS_STEPS.find(s => s.key === liveOnes[0].order_status)?.label || 'Placed')
+      : `${liveOnes.length} orders in progress`;
+    document.getElementById('floatingTrackerText').innerHTML = `🛵 <strong>Order ${codes}</strong> · ${label}`;
+  }
+
+  function openTrackingView(){
+    if (activeOrders.length === 0) return;
+    document.getElementById('trackingView').classList.remove('hidden');
+    renderTrackingAll(activeOrders);
+  }
+
+  function closeTrackingView(){
+    document.getElementById('trackingView').classList.add('hidden');
+    // Intentionally does NOT clear localStorage/channels — the floating
+    // pill (and the order) stays trackable until it reaches a final status.
+  }
+
+  function clearTracking(){
+    document.getElementById('trackingView').classList.add('hidden');
+    document.getElementById('floatingTracker').classList.add('hidden');
+    localStorage.removeItem('snapit_tracking_order_ids');
+    trackingChannels.forEach(ch => sb.removeChannel(ch));
+    trackingChannels = [];
+    activeOrders = [];
   }
 
   function renderTrackingAll(orders){
@@ -740,7 +821,7 @@ const CustomerApp = (function(){
     container.innerHTML = `
       <div class="flex items-center justify-between mb-5">
         <h2 class="font-display text-2xl font-semibold">${orders.length > 1 ? 'Your orders' : 'Order ' + orders[0].order_code}</h2>
-        <button onclick="CustomerApp.closeTracking()" class="text-[var(--ink-soft)] text-2xl leading-none">&times;</button>
+        <button onclick="CustomerApp.closeTrackingView()" class="text-[var(--ink-soft)] text-2xl leading-none">&times;</button>
       </div>
       <div id="trackingBlocks" class="space-y-8"></div>
     `;
@@ -752,7 +833,6 @@ const CustomerApp = (function(){
       updateTrackingBlock(order);
     });
   }
-
   function updateTrackingBlock(order){
     const block = document.getElementById(`trackBlock-${order.id}`);
     if (!block) return;
@@ -792,23 +872,18 @@ const CustomerApp = (function(){
       <div class="pb-4 mb-4 border-b" style="border-color:var(--line)">
         <p class="font-display text-lg font-semibold">${restaurant ? restaurant.name : ''} <span class="text-sm font-normal text-[var(--ink-soft)]">· ${order.order_code}</span></p>
         <p class="text-sm text-[var(--ink-soft)] mt-0.5">Total ${money(order.total_amount)} · ${order.delivery_address}</p>
+        ${order.notes ? `<p class="text-xs text-[var(--ink-soft)] mt-1">Note: ${order.notes}</p>` : ''}
       </div>
       ${waButton}
       <div>${stepsHtml}</div>
     `;
   }
 
-  function closeTracking(){
-    document.getElementById('trackingView').classList.add('hidden');
-    localStorage.removeItem('snapit_tracking_order_ids');
-    trackingChannels.forEach(ch => sb.removeChannel(ch));
-    trackingChannels = [];
-  }
-
-  return { init, loadMenuFor, setCategory, setSearch, toggleSearch, addToCart, changeQty, openCart, closeCart, placeOrder, closeTracking };
+  return { init, loadMenuFor, setCategory, setSearch, toggleSearch, addToCart, changeQty, openCart, closeCart, placeOrder, openTrackingView, closeTrackingView };
 })();
 
- /* =========================================================
+
+/* =========================================================
    ADMIN APP — namespaced, lives behind the #admin route
    ========================================================= */
 const AdminApp = (function(){
@@ -820,6 +895,21 @@ const AdminApp = (function(){
   let currentMenuItems = [];
   let editingItemId = null;
   let started = false;
+  let ordersRange = 'today';
+  let ordersCafeFilter = 'all';
+  let reportMode = 'daily';
+  let currentTopItems = [];
+
+  const RANGE_LABELS = { today: 'Today', week: 'This week', month: 'This month', all: 'All time' };
+
+  function rangeStart(range){
+    if (range === 'all') return null;
+    const d = new Date();
+    d.setHours(0,0,0,0);
+    if (range === 'week') d.setDate(d.getDate() - 6);
+    if (range === 'month') d.setDate(d.getDate() - 29);
+    return d;
+  }
 
   async function checkPasscode(){
     const input = document.getElementById('passcodeInput').value.trim();
@@ -852,6 +942,8 @@ const AdminApp = (function(){
     restaurants = rests || [];
     activeMenuRestaurantId = restaurants[0]?.id || null;
 
+    renderOrdersRangeChips();
+    renderOrdersCafeChips();
     await loadOrders();
     renderMenuRestaurantTabs();
     await loadMenuAdmin();
@@ -861,12 +953,46 @@ const AdminApp = (function(){
   function switchTab(tab){
     document.getElementById('ordersTab').classList.toggle('hidden', tab!=='orders');
     document.getElementById('menuTab').classList.toggle('hidden', tab!=='menu');
+    document.getElementById('reportsTab').classList.toggle('hidden', tab!=='reports');
     document.getElementById('tabOrders').className = 'admin-seg-btn' + (tab==='orders' ? ' admin-seg-btn-active' : '');
     document.getElementById('tabMenu').className = 'admin-seg-btn' + (tab==='menu' ? ' admin-seg-btn-active' : '');
+    document.getElementById('tabReports').className = 'admin-seg-btn' + (tab==='reports' ? ' admin-seg-btn-active' : '');
+    if (tab === 'reports') loadReports();
   }
 
-  async function loadOrders(){
-    const { data, error } = await sb.from('orders').select('*, order_items(*)').order('created_at', { ascending:false }).limit(100);
+  function setOrdersRange(range){
+    ordersRange = range;
+    renderOrdersRangeChips();
+    loadOrders();
+  }
+
+  function setOrdersCafe(restId){
+    ordersCafeFilter = restId;
+    renderOrdersCafeChips();
+    loadOrders();
+  }
+
+  function renderOrdersRangeChips(){
+    document.getElementById('ordersRangeChips').innerHTML = Object.entries(RANGE_LABELS).map(([key,label]) => `
+      <button onclick="AdminApp.setOrdersRange('${key}')" class="admin-seg-btn ${ordersRange===key ? 'admin-seg-btn-active':''}" style="border-radius:999px; padding:6px 12px;">
+        ${label}
+      </button>`).join('');
+  }
+
+  function renderOrdersCafeChips(){
+    const chips = [`<button onclick="AdminApp.setOrdersCafe('all')" class="admin-seg-btn ${ordersCafeFilter==='all' ? 'admin-seg-btn-active':''}" style="border-radius:999px; padding:6px 12px;">All cafes</button>`]
+      .concat(restaurants.map(r => `
+        <button onclick="AdminApp.setOrdersCafe('${r.id}')" class="admin-seg-btn ${ordersCafeFilter===r.id ? 'admin-seg-btn-active':''}" style="border-radius:999px; padding:6px 12px;">
+          ${r.name}
+        </button>`));
+    document.getElementById('ordersCafeChips').innerHTML = chips.join('');
+  }
+async function loadOrders(){
+    let query = sb.from('orders').select('*, order_items(*)').order('created_at', { ascending:false }).limit(300);
+    const start = rangeStart(ordersRange);
+    if (start) query = query.gte('created_at', start.toISOString());
+    if (ordersCafeFilter !== 'all') query = query.eq('restaurant_id', ordersCafeFilter);
+    const { data, error } = await query;
     if (error){ console.error(error); return; }
     ordersCache = data;
     renderOrders();
@@ -874,11 +1000,12 @@ const AdminApp = (function(){
   }
 
   function renderStats(){
-    const todayStr = new Date().toDateString();
-    const today = ordersCache.filter(o => new Date(o.created_at).toDateString() === todayStr);
     const active = ordersCache.filter(o => ['placed','accepted','preparing','out_for_delivery'].includes(o.order_status));
-    document.getElementById('statTodayCount').textContent = today.length;
-    document.getElementById('statTodaySales').textContent = money(today.reduce((s,o)=>s+Number(o.total_amount),0));
+    const valid = ordersCache.filter(o => !['rejected','cancelled'].includes(o.order_status));
+    document.getElementById('statOrdersLabel').textContent = `${RANGE_LABELS[ordersRange]}'s orders`;
+    document.getElementById('statSalesLabel').textContent = `${RANGE_LABELS[ordersRange]}'s sales`;
+    document.getElementById('statTodayCount').textContent = ordersCache.length;
+    document.getElementById('statTodaySales').textContent = money(valid.reduce((s,o)=>s+Number(o.total_amount),0));
     document.getElementById('statActiveCount').textContent = active.length;
   }
 
@@ -901,7 +1028,9 @@ const AdminApp = (function(){
           <span class="status-pill" style="background:${STATUS_BG[o.order_status]}; color:${color}">${STATUS_LABEL[o.order_status]}</span>
         </div>
         <p class="text-xs text-[var(--ink-soft)] mb-1">${o.customer_name} · ${o.customer_phone}</p>
-        <p class="text-xs text-[var(--ink-soft)] mb-2.5">${o.delivery_address}</p>
+        <p class="text-xs text-[var(--ink-soft)] mb-1">${o.delivery_address}</p>
+        <p class="text-[11px] text-[var(--ink-soft)] mb-2.5">${new Date(o.created_at).toLocaleString('en-IN')}</p>
+        ${o.notes ? `<p class="text-xs mb-2.5" style="color:var(--gold-dark)">Note: ${o.notes}</p>` : ''}
         <ul class="text-xs mb-3 space-y-0.5 text-[var(--ink)]">
           ${o.order_items.map(li => `<li>${li.quantity} × ${li.item_name}${li.portion!=='single'?` (${li.portion})`:''}</li>`).join('')}
         </ul>
@@ -910,6 +1039,7 @@ const AdminApp = (function(){
           ${!isFinal && nextStatus ? `<button onclick="AdminApp.updateStatus('${o.id}','${nextStatus}')" class="btn-sm text-white" style="background:var(--olive); font-size:12px; font-weight:600; padding:7px 14px; border-radius:999px;">Mark ${STATUS_LABEL[nextStatus]}</button>` : ''}
           ${o.order_status==='placed' ? `<button onclick="AdminApp.updateStatus('${o.id}','rejected')" class="btn-sm" style="border:1.5px solid var(--brand); color:var(--brand); font-size:12px; font-weight:600; padding:6.5px 14px; border-radius:999px;">Reject</button>` : ''}
           ${!isFinal ? `<button onclick="AdminApp.updateStatus('${o.id}','cancelled')" class="btn-sm text-[var(--ink-soft)]" style="border:1.5px solid var(--line); font-size:12px; font-weight:600; padding:6.5px 14px; border-radius:999px;">Cancel</button>` : ''}
+          ${isFinal ? `<button onclick="AdminApp.deleteOrder('${o.id}')" class="btn-sm" style="border:1.5px solid var(--line); color:var(--ink-soft); font-size:12px; font-weight:600; padding:6.5px 14px; border-radius:999px;">🗑 Delete</button>` : ''}
         </div>
       </div>`;
     }).join('') || `<p class="text-sm text-[var(--ink-soft)] text-center py-10">No orders yet.</p>`;
@@ -942,6 +1072,33 @@ const AdminApp = (function(){
     }
     const { error } = await sb.from('orders').update({ order_status: status }).eq('id', orderId);
     if (error) console.error(error);
+  }
+
+  async function deleteOrder(orderId){
+    const order = ordersCache.find(o => o.id === orderId);
+    if (order && !['delivered','rejected','cancelled'].includes(order.order_status)){
+      alert('Only completed, rejected or cancelled orders can be deleted.');
+      return;
+    }
+    const ok = await confirmDialog('Permanently delete this order? This cannot be undone.');
+    if (!ok) return;
+    const { error } = await sb.from('orders').delete().eq('id', orderId);
+    if (error) console.error(error);
+    loadOrders();
+  }
+
+  async function cleanupOldOrders(){
+    const ok = await confirmDialog('Delete all completed, rejected or cancelled orders older than 30 days? Active orders are never touched. This cannot be undone.');
+    if (!ok) return;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    const { error, count } = await sb.from('orders')
+      .delete({ count: 'exact' })
+      .lt('created_at', cutoff.toISOString())
+      .in('order_status', ['delivered','rejected','cancelled']);
+    if (error) console.error(error);
+    alert(error ? 'Something went wrong.' : `Deleted ${count ?? 0} old order(s).`);
+    loadOrders();
   }
 
   function subscribeRealtime(){
@@ -1011,7 +1168,6 @@ const AdminApp = (function(){
         </div>
       </div>`).join('');
   }
-
   async function toggleAvailability(itemId, newValue){
     const { error } = await sb.from('menu_items').update({ is_available: newValue }).eq('id', itemId);
     if (error) console.error(error);
@@ -1064,8 +1220,130 @@ const AdminApp = (function(){
     if (error) console.error(error);
     closeEditItem();
     loadMenuAdmin();
-}
-return { init, checkPasscode, switchTab, updateStatus, setMenuRestaurant, toggleAvailability, togglePopular, openEditItem, closeEditItem, saveItemEdit };
+  }
+
+  function startOfDay(date){ const d = new Date(date); d.setHours(0,0,0,0); return d; }
+  function addDays(date, n){ const d = new Date(date); d.setDate(d.getDate()+n); return d; }
+
+  function renderBarChart(buckets){
+    const max = Math.max(1, ...buckets.map(b=>b.total));
+    return `<div class="flex items-end gap-2" style="height:120px">
+      ${buckets.map(b => `
+        <div class="flex-1 flex flex-col items-center justify-end h-full">
+          <div class="w-full rounded-t-md" style="height:${b.total > 0 ? Math.max(6,(b.total/max)*100) : 2}%; background:var(--ink)"></div>
+          <p class="text-[9px] text-[var(--ink-soft)] mt-1.5 whitespace-nowrap">${b.label}</p>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  async function loadDailyReport(){
+    const start = addDays(startOfDay(new Date()), -6);
+    const { data } = await sb.from('orders').select('total_amount, created_at, order_status').gte('created_at', start.toISOString());
+    const valid = (data||[]).filter(o => !['rejected','cancelled'].includes(o.order_status));
+    const buckets = [];
+    for (let i=0;i<7;i++){
+      const day = addDays(start, i);
+      const label = day.toLocaleDateString('en-IN', { weekday: 'short' });
+      const total = valid.filter(o => startOfDay(new Date(o.created_at)).getTime() === day.getTime())
+        .reduce((s,o)=>s+Number(o.total_amount),0);
+      buckets.push({ label, total });
+    }
+    return buckets;
+  }
+
+  async function loadWeeklyReport(){
+    const start = addDays(startOfDay(new Date()), -7*7);
+    const { data } = await sb.from('orders').select('total_amount, created_at, order_status').gte('created_at', start.toISOString());
+    const valid = (data||[]).filter(o => !['rejected','cancelled'].includes(o.order_status));
+    const buckets = [];
+    for (let i=0;i<8;i++){
+      const weekStart = addDays(start, i*7);
+      const weekEnd = addDays(weekStart, 7);
+      const label = `${weekStart.getDate()}/${weekStart.getMonth()+1}`;
+      const total = valid.filter(o => {
+        const t = new Date(o.created_at).getTime();
+        return t >= weekStart.getTime() && t < weekEnd.getTime();
+      }).reduce((s,o)=>s+Number(o.total_amount),0);
+      buckets.push({ label, total });
+    }
+    return buckets;
+  }
+
+  async function loadTopItems(days){
+    const start = addDays(startOfDay(new Date()), -(days-1));
+    const { data: ordersData } = await sb.from('orders').select('id, restaurant_id, order_status').gte('created_at', start.toISOString());
+    const validOrders = (ordersData||[]).filter(o => !['rejected','cancelled'].includes(o.order_status));
+    const restaurantByOrder = {};
+    validOrders.forEach(o => restaurantByOrder[o.id] = o.restaurant_id);
+    const validIds = validOrders.map(o => o.id);
+    if (validIds.length === 0) return [];
+
+    const { data: itemsData } = await sb.from('order_items').select('menu_item_id, item_name, quantity, line_total, order_id').in('order_id', validIds);
+    const agg = {};
+    (itemsData||[]).forEach(li => {
+      const key = li.menu_item_id || li.item_name;
+      if (!agg[key]) agg[key] = { name: li.item_name, menu_item_id: li.menu_item_id, restaurant_id: restaurantByOrder[li.order_id], qty: 0, revenue: 0 };
+      agg[key].qty += li.quantity;
+      agg[key].revenue += Number(li.line_total);
+    });
+    return Object.values(agg).sort((a,b)=>b.qty-a.qty);
+  }
+
+  function renderTopItemsList(topItems){
+    const top10 = topItems.slice(0,10);
+    if (top10.length === 0) return `<p class="text-sm text-[var(--ink-soft)] text-center py-6">No sales in this period yet.</p>`;
+    return top10.map((item,i) => {
+      const restaurant = restaurants.find(r=>r.id===item.restaurant_id);
+      return `<div class="flex items-center justify-between py-2.5 divider">
+        <div class="flex items-center gap-2.5">
+          <span class="text-xs font-semibold text-[var(--ink-soft)] w-4">${i+1}</span>
+          <div>
+            <p class="text-sm">${item.name}</p>
+            <p class="text-xs text-[var(--ink-soft)]">${restaurant ? restaurant.name : ''}</p>
+          </div>
+        </div>
+        <div class="text-right">
+          <p class="text-sm font-semibold">${item.qty} sold</p>
+          <p class="text-xs text-[var(--ink-soft)]">${money(item.revenue)}</p>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  async function loadReports(){
+    document.getElementById('reportModeDaily').className = 'admin-seg-btn' + (reportMode==='daily' ? ' admin-seg-btn-active':'');
+    document.getElementById('reportModeWeekly').className = 'admin-seg-btn' + (reportMode==='weekly' ? ' admin-seg-btn-active':'');
+
+    const days = reportMode === 'daily' ? 7 : 56;
+    const buckets = reportMode === 'daily' ? await loadDailyReport() : await loadWeeklyReport();
+    const topItems = await loadTopItems(days);
+    currentTopItems = topItems;
+
+    document.getElementById('reportChart').innerHTML = renderBarChart(buckets);
+    document.getElementById('reportTotal').textContent = money(buckets.reduce((s,b)=>s+b.total,0));
+    document.getElementById('reportTopItems').innerHTML = renderTopItemsList(topItems);
+  }
+
+  function setReportMode(mode){ reportMode = mode; loadReports(); }
+
+  async function autoMarkPopular(){
+    if (currentTopItems.length === 0){ alert('No sales data yet for this period.'); return; }
+    const byRestaurant = {};
+    currentTopItems.forEach(item => {
+      if (!item.menu_item_id) return;
+      (byRestaurant[item.restaurant_id] = byRestaurant[item.restaurant_id] || []).push(item);
+    });
+    const idsToMark = [];
+    Object.values(byRestaurant).forEach(list => {
+      list.slice(0,3).forEach(item => idsToMark.push(item.menu_item_id));
+    });
+    if (idsToMark.length === 0){ alert('No matching menu items to mark.'); return; }
+    await sb.from('menu_items').update({ is_popular: true }).in('id', idsToMark);
+    alert(`Marked ${idsToMark.length} top-selling item(s) as popular.`);
+    if (activeMenuRestaurantId) loadMenuAdmin();
+  }
+
+  return { init, checkPasscode, switchTab, updateStatus, setMenuRestaurant, toggleAvailability, togglePopular, openEditItem, closeEditItem, saveItemEdit, setOrdersRange, setOrdersCafe, setReportMode, autoMarkPopular, deleteOrder, cleanupOldOrders };
 })();
 
 /* =========================================================
@@ -1083,4 +1361,4 @@ snapitRoute();
 </body>
 </html>
 
-                 
+                  
