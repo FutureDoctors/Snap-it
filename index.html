@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -108,7 +108,6 @@
 </head>
 <body class="max-w-md mx-auto min-h-screen relative">
 
- 
 <!-- =========================================================
      CUSTOMER APP — shown at the plain URL (no #admin)
      ========================================================= -->
@@ -259,6 +258,32 @@
     <source src="https://cdn.freesound.org/previews/536/536108_11937282-lq.mp3" type="audio/mpeg">
   </audio>
 
+  <div id="adminConfirmModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center px-6">
+    <div class="absolute inset-0 bg-black/50"></div>
+    <div class="pop relative bg-[var(--card)] rounded-2xl p-5 w-full max-w-xs">
+      <p id="adminConfirmMessage" class="text-sm mb-5"></p>
+      <div class="flex gap-3">
+        <button id="adminConfirmCancelBtn" class="flex-1 rounded-xl py-2.5 text-sm font-semibold" style="border:1.5px solid var(--line); color:var(--ink-soft)">Cancel</button>
+        <button id="adminConfirmOkBtn" class="flex-1 rounded-xl py-2.5 text-sm font-semibold" style="background:var(--brand); color:#fff">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="editItemModal" class="hidden fixed inset-0 z-[60] flex items-center justify-center px-6">
+    <div class="absolute inset-0 bg-black/50" onclick="AdminApp.closeEditItem()"></div>
+    <div class="pop relative bg-[var(--card)] rounded-2xl p-5 w-full max-w-xs">
+      <h3 class="font-display text-lg font-semibold mb-4">Edit item</h3>
+      <div class="space-y-3 mb-4">
+        <input id="editItemName" type="text" placeholder="Item name" class="w-full rounded-lg px-3 py-2.5 text-sm">
+        <div id="editItemPriceFields" class="space-y-2"></div>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="AdminApp.closeEditItem()" class="flex-1 rounded-xl py-2.5 text-sm font-semibold" style="border:1.5px solid var(--line); color:var(--ink-soft)">Cancel</button>
+        <button onclick="AdminApp.saveItemEdit()" class="flex-1 rounded-xl py-2.5 text-sm font-semibold" style="background:var(--ink); color:var(--gold)">Save</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -275,7 +300,7 @@ function catEmoji(name){
   if (n.includes('burger')) return '🍔';
   if (n.includes('pizza')) return '🍕';
   if (n.includes('fries')) return '🍟';
-  if (n.includes('noodle') || n.includes('chaumin') || n.includes('chaumin')) return '🍜';
+  if (n.includes('noodle') || n.includes('chawmin') || n.includes('chaumin')) return '🍜';
   if (n.includes('fried rice') || n === 'rice' || n.includes('rice')) return '🍚';
   if (n.includes('momo')) return '🥟';
   if (n.includes('maggi')) return '🍲';
@@ -309,9 +334,9 @@ const CustomerApp = (function(){
   let activeRestaurantId = null;
   let activeCategoryId = 'all';
   let searchQuery = '';
-  let cart = [];
+  let cart = [];          // shared across restaurants — each line item carries its own restaurant_id
   let settings = { delivery_fee: 20, tax_percent: 5, min_items: 1 };
-  let orderChannel = null;
+  let trackingChannels = [];
 
   async function init(){
     const { data: settingsRow } = await sb.from('settings').select('*').eq('id',1).single();
@@ -327,8 +352,10 @@ const CustomerApp = (function(){
     renderRestaurantTabs();
     await loadMenuFor(activeRestaurantId);
 
-    const savedOrderId = localStorage.getItem('snapit_tracking_order_id');
-    if (savedOrderId) trackOrder(savedOrderId);
+    const savedOrderIds = localStorage.getItem('snapit_tracking_order_ids');
+    if (savedOrderIds){
+      try { trackOrders(JSON.parse(savedOrderIds)); } catch(e){}
+    }
   }
 
   function toggleSearch(){
@@ -338,13 +365,6 @@ const CustomerApp = (function(){
   }
 
   async function loadMenuFor(restaurantId){
-    const isSwitch = activeRestaurantId !== null && activeRestaurantId !== restaurantId;
-    if (isSwitch && cart.length > 0){
-      const ok = confirm('Switching restaurants will clear your current cart. Continue?');
-      if (!ok) { renderRestaurantTabs(); return; }
-      cart = [];
-      renderCartBar();
-    }
     activeRestaurantId = restaurantId;
     activeCategoryId = 'all';
     searchQuery = '';
@@ -358,8 +378,10 @@ const CustomerApp = (function(){
     renderCategoryChips();
     renderMenuList();
     renderPopular();
+    renderCartBar();
   }
- function renderPopular(){
+
+  function renderPopular(){
     const popular = items.filter(i => i.is_popular && i.is_available);
     const section = document.getElementById('popularSection');
     if (popular.length === 0){ section.classList.add('hidden'); return; }
@@ -488,7 +510,8 @@ const CustomerApp = (function(){
 
   function addToCart(menu_item_id, name, portion, unit_price){
     const key = `${menu_item_id}_${portion}`;
-    cart.push({ key, menu_item_id, name, portion, unit_price, qty: 1 });
+    const restaurant = restaurants.find(r => r.id === activeRestaurantId);
+    cart.push({ key, menu_item_id, restaurant_id: activeRestaurantId, restaurant_name: restaurant ? restaurant.name : '', name, portion, unit_price, qty: 1 });
     renderMenuList();
     renderCartBar();
     if (navigator.vibrate) navigator.vibrate(12);
@@ -506,7 +529,14 @@ const CustomerApp = (function(){
     if (!document.getElementById('cartSheet').classList.contains('hidden')) renderCartSheet();
   }
 
-  function cartSubtotal(){ return cart.reduce((s,c)=> s + c.unit_price*c.qty, 0); }
+  function groupCartByRestaurant(){
+    const groups = {};
+    cart.forEach(c => {
+      (groups[c.restaurant_id] = groups[c.restaurant_id] || { restaurant_name: c.restaurant_name, items: [] }).items.push(c);
+    });
+    return groups;
+  }
+ function cartSubtotal(){ return cart.reduce((s,c)=> s + c.unit_price*c.qty, 0); }
 
   function renderCartBar(){
     const bar = document.getElementById('cartBar');
@@ -529,36 +559,54 @@ const CustomerApp = (function(){
 
   function renderCartSheet(){
     if (cart.length === 0){ closeCart(); return; }
-    const subtotal = cartSubtotal();
-    const tax = subtotal * (settings.tax_percent/100);
-    const total = subtotal + tax + Number(settings.delivery_fee);
+    const groups = groupCartByRestaurant();
+    const restaurantIds = Object.keys(groups);
     const totalItems = cart.reduce((s,c)=>s+c.qty,0);
     const minItems = Number(settings.min_items) || 1;
     const belowMin = totalItems < minItems;
 
+    let grandTotal = 0;
+    const sectionsHtml = restaurantIds.map((restId, idx) => {
+      const group = groups[restId];
+      const subtotal = group.items.reduce((s,c)=> s + c.unit_price*c.qty, 0);
+      const tax = subtotal * (settings.tax_percent/100);
+      const deliveryForThis = idx === 0 ? Number(settings.delivery_fee) : 0;
+      const total = subtotal + tax + deliveryForThis;
+      grandTotal += total;
+      return `
+        <div class="mb-4">
+          <p class="font-display text-sm font-semibold mb-2">${group.restaurant_name}</p>
+          <div class="space-y-2 mb-2">
+            ${group.items.map(c => `
+              <div class="flex items-center justify-between item-card !mb-0 !py-2.5">
+                <div class="flex items-start">
+                  ${VEG}
+                  <div>
+                    <p class="text-sm font-medium leading-tight">${c.name}${c.portion!=='single' ? ` <span class="text-xs text-[var(--ink-soft)] font-normal">(${c.portion})</span>`:''}</p>
+                    <p class="text-xs text-[var(--ink-soft)] mt-1">${money(c.unit_price)} × ${c.qty}</p>
+                  </div>
+                </div>
+                <div class="qty-pill">
+                  <button class="qty-btn" onclick="CustomerApp.changeQty('${c.key}',-1)">−</button>
+                  <span class="qty-num">${c.qty}</span>
+                  <button class="qty-btn" onclick="CustomerApp.changeQty('${c.key}',1)">+</button>
+                </div>
+              </div>`).join('')}
+          </div>
+          <div class="space-y-1 text-xs rounded-xl p-3" style="background:var(--paper-deep)">
+            <div class="flex justify-between text-[var(--ink-soft)]"><span>Subtotal</span><span>${money(subtotal)}</span></div>
+            <div class="flex justify-between text-[var(--ink-soft)]"><span>Tax (${settings.tax_percent}%)</span><span>${money(tax)}</span></div>
+            <div class="flex justify-between text-[var(--ink-soft)]"><span>Delivery fee</span><span>${deliveryForThis > 0 ? money(deliveryForThis) : 'Included above'}</span></div>
+            <div class="flex justify-between font-semibold text-[13px] pt-1.5 mt-1 border-t" style="border-color:var(--line)"><span>${group.restaurant_name} total</span><span>${money(total)}</span></div>
+          </div>
+        </div>`;
+    }).join('');
+
     document.getElementById('sheetBody').innerHTML = `
-      <div class="space-y-2.5 mb-5">
-        ${cart.map(c => `
-          <div class="flex items-center justify-between item-card !mb-0 !py-2.5">
-            <div class="flex items-start">
-              ${VEG}
-              <div>
-                <p class="text-sm font-medium leading-tight">${c.name}${c.portion!=='single' ? ` <span class="text-xs text-[var(--ink-soft)] font-normal">(${c.portion})</span>`:''}</p>
-                <p class="text-xs text-[var(--ink-soft)] mt-1">${money(c.unit_price)} × ${c.qty}</p>
-              </div>
-            </div>
-            <div class="qty-pill">
-              <button class="qty-btn" onclick="CustomerApp.changeQty('${c.key}',-1)">−</button>
-              <span class="qty-num">${c.qty}</span>
-              <button class="qty-btn" onclick="CustomerApp.changeQty('${c.key}',1)">+</button>
-            </div>
-          </div>`).join('')}
-      </div>
-      <div class="space-y-1.5 text-sm rounded-2xl p-4 mb-5" style="background:var(--paper-deep)">
-        <div class="flex justify-between text-[var(--ink-soft)]"><span>Subtotal</span><span>${money(subtotal)}</span></div>
-        <div class="flex justify-between text-[var(--ink-soft)]"><span>Tax (${settings.tax_percent}%)</span><span>${money(tax)}</span></div>
-        <div class="flex justify-between text-[var(--ink-soft)]"><span>Delivery fee</span><span>${money(settings.delivery_fee)}</span></div>
-        <div class="flex justify-between font-semibold text-base pt-2 mt-1 border-t" style="border-color:var(--line)"><span>Total</span><span>${money(total)}</span></div>
+      ${restaurantIds.length > 1 ? `<p class="text-xs mb-4 px-3 py-2.5 rounded-lg" style="background:var(--gold-tint); color:var(--gold-dark)">Items from ${restaurantIds.length} restaurants — sent as separate orders, but delivery fee is charged only once.</p>` : ''}
+      ${sectionsHtml}
+      <div class="flex justify-between font-semibold text-base py-3 mb-4 border-t" style="border-color:var(--line)">
+        <span>Grand total</span><span>${money(grandTotal)}</span>
       </div>
       <div class="space-y-3 mb-5">
         <input id="custName" type="text" placeholder="Your name" class="w-full rounded-xl px-4 py-3 text-sm">
@@ -567,7 +615,7 @@ const CustomerApp = (function(){
       </div>
       <button onclick="CustomerApp.placeOrder()" ${belowMin ? 'disabled' : ''}
         class="cart-fab w-full rounded-2xl py-4 font-semibold text-sm ${belowMin ? 'opacity-40' : ''}">
-        Place order · ${money(total)}
+        Place order${restaurantIds.length>1?'s':''} · ${money(grandTotal)}
       </button>
       ${belowMin ? `<p class="text-xs text-center mt-2" style="color:var(--brand)">Add ${minItems - totalItems} more item${(minItems-totalItems)>1?'s':''} — minimum order is ${minItems} items.</p>` : ''}
       <p id="checkoutError" class="text-xs text-center mt-2" style="color:var(--brand)"></p>
@@ -592,61 +640,74 @@ const CustomerApp = (function(){
     if (totalItems < minItems){
       errEl.textContent = `Minimum order is ${minItems} items.`;
       return;
-     }
-    // Open the tab NOW, while this is still a direct click — browsers block
-    // window.open() called after an await, so we reserve the tab first and
-    // point it at WhatsApp once the order details are ready below.
+    }
+
+    // Reserve a tab NOW, while this is still a direct click — browsers block
+    // window.open() called after an await. Only the first restaurant's chat
+    // can be auto-opened this way; any others get a tap-to-send button on
+    // the tracking screen instead.
     const waTab = window.open('', '_blank');
 
-    const subtotal = cartSubtotal();
-    const tax = subtotal * (settings.tax_percent/100);
-    const total = subtotal + tax + Number(settings.delivery_fee);
-    const orderCode = genOrderCode();
-    const restaurant = restaurants.find(r => r.id === activeRestaurantId);
+    const groups = groupCartByRestaurant();
+    const groupEntries = Object.entries(groups);
+    const placedOrders = [];
 
-    const { data: order, error: orderErr } = await sb.from('orders').insert({
-      order_code: orderCode,
-      restaurant_id: activeRestaurantId,
-      customer_name: name,
-      customer_phone: phone,
-      delivery_address: address,
-      subtotal, tax_amount: tax, delivery_fee: settings.delivery_fee, total_amount: total,
-      order_status: 'placed'
-    }).select().single();
+    for (let i = 0; i < groupEntries.length; i++){
+      const [restId, group] = groupEntries[i];
+      const restaurant = restaurants.find(r => r.id === restId);
+      const subtotal = group.items.reduce((s,c)=> s + c.unit_price*c.qty, 0);
+      const tax = subtotal * (settings.tax_percent/100);
+      const deliveryForThis = i === 0 ? Number(settings.delivery_fee) : 0;
+      const total = subtotal + tax + deliveryForThis;
+      const orderCode = genOrderCode();
 
-    if (orderErr){ errEl.textContent = 'Something went wrong placing your order. Please try again.'; console.error(orderErr); return; }
+      const { data: order, error: orderErr } = await sb.from('orders').insert({
+        order_code: orderCode,
+        restaurant_id: restId,
+        customer_name: name,
+        customer_phone: phone,
+        delivery_address: address,
+        subtotal, tax_amount: tax, delivery_fee: deliveryForThis, total_amount: total,
+        order_status: 'placed'
+      }).select().single();
 
-    const orderItemRows = cart.map(c => ({
-      order_id: order.id, menu_item_id: c.menu_item_id, item_name: c.name,
-      portion: c.portion, unit_price: c.unit_price, quantity: c.qty, line_total: c.unit_price * c.qty
-    }));
-    await sb.from('order_items').insert(orderItemRows);
+      if (orderErr){ errEl.textContent = 'Something went wrong placing your order. Please try again.'; console.error(orderErr); return; }
 
-    const lines = [
-      `*New SnapIt order — ${orderCode}*`,
-      `Restaurant: ${restaurant.name}`, ``,
-      ...cart.map(c => `${c.qty} × ${c.name}${c.portion!=='single' ? ` (${c.portion})`:''} — ${money(c.unit_price*c.qty)}`),
-      ``,
-      `Subtotal: ${money(subtotal)}`,
-      `Tax: ${money(tax)}`,
-      `Delivery: ${money(settings.delivery_fee)}`,
-      `*Total: ${money(total)}*`, ``,
-      `Customer: ${name}`, `Phone: ${phone}`, `Address: ${address}`
-    ];
-    const waText = encodeURIComponent(lines.join('\n'));
-    const waUrl = `https://wa.me/${restaurant.whatsapp_number}?text=${waText}`;
+      const orderItemRows = group.items.map(c => ({
+        order_id: order.id, menu_item_id: c.menu_item_id, item_name: c.name,
+        portion: c.portion, unit_price: c.unit_price, quantity: c.qty, line_total: c.unit_price * c.qty
+      }));
+      await sb.from('order_items').insert(orderItemRows);
 
-    await sb.from('orders').update({ whatsapp_sent_status: true }).eq('id', order.id);
+      const lines = [
+        `*New SnapIt order — ${orderCode}*`,
+        `Restaurant: ${restaurant.name}`, ``,
+        ...group.items.map(c => `${c.qty} × ${c.name}${c.portion!=='single' ? ` (${c.portion})`:''} — ${money(c.unit_price*c.qty)}`),
+        ``,
+        `Subtotal: ${money(subtotal)}`,
+        `Tax: ${money(tax)}`,
+        `Delivery: ${deliveryForThis > 0 ? money(deliveryForThis) : 'Included with other order'}`,
+        `*Total: ${money(total)}*`, ``,
+        `Customer: ${name}`, `Phone: ${phone}`, `Address: ${address}`
+      ];
+      const waText = encodeURIComponent(lines.join('\n'));
+      const waUrl = `https://wa.me/${restaurant.whatsapp_number}?text=${waText}`;
+
+      await sb.from('orders').update({ whatsapp_sent_status: true }).eq('id', order.id);
+      localStorage.setItem('snapit_wa_url_' + order.id, waUrl);
+      placedOrders.push({ id: order.id, waUrl });
+    }
+
+    if (waTab && placedOrders[0]) { waTab.location.href = placedOrders[0].waUrl; }
+    else if (waTab) { waTab.close(); }
 
     cart = [];
     renderCartBar();
-    localStorage.setItem('snapit_tracking_order_id', order.id);
-    localStorage.setItem('snapit_wa_url_' + order.id, waUrl);
-
-    if (waTab) { waTab.location.href = waUrl; }
+    const orderIds = placedOrders.map(o => o.id);
+    localStorage.setItem('snapit_tracking_order_ids', JSON.stringify(orderIds));
 
     closeCart();
-    trackOrder(order.id);
+    trackOrders(orderIds);
   }
 
   const STATUS_STEPS = [
@@ -657,21 +718,45 @@ const CustomerApp = (function(){
     { key: 'delivered', label: 'Delivered', icon: '🎉' }
   ];
 
-  async function trackOrder(orderId){
-    const { data: order } = await sb.from('orders').select('*').eq('id', orderId).single();
-    if (!order){ localStorage.removeItem('snapit_tracking_order_id'); return; }
+  async function trackOrders(orderIds){
+    if (!orderIds || orderIds.length === 0) return;
+    const { data: orders } = await sb.from('orders').select('*').in('id', orderIds);
+    if (!orders || orders.length === 0){ localStorage.removeItem('snapit_tracking_order_ids'); return; }
 
-    renderTracking(order);
     document.getElementById('trackingView').classList.remove('hidden');
+    renderTrackingAll(orders);
 
-    if (orderChannel) sb.removeChannel(orderChannel);
-    orderChannel = sb.channel(`order-${orderId}`)
-      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'orders', filter:`id=eq.${orderId}` },
-        payload => renderTracking(payload.new))
-      .subscribe();
+    trackingChannels.forEach(ch => sb.removeChannel(ch));
+    trackingChannels = orders.map(order =>
+      sb.channel(`order-${order.id}`)
+        .on('postgres_changes', { event:'UPDATE', schema:'public', table:'orders', filter:`id=eq.${order.id}` },
+          payload => updateTrackingBlock(payload.new))
+        .subscribe()
+    );
   }
 
-  function renderTracking(order){
+  function renderTrackingAll(orders){
+    const container = document.querySelector('#trackingView > div');
+    container.innerHTML = `
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="font-display text-2xl font-semibold">${orders.length > 1 ? 'Your orders' : 'Order ' + orders[0].order_code}</h2>
+        <button onclick="CustomerApp.closeTracking()" class="text-[var(--ink-soft)] text-2xl leading-none">&times;</button>
+      </div>
+      <div id="trackingBlocks" class="space-y-8"></div>
+    `;
+    const blocksEl = document.getElementById('trackingBlocks');
+    orders.forEach(order => {
+      const block = document.createElement('div');
+      block.id = `trackBlock-${order.id}`;
+      blocksEl.appendChild(block);
+      updateTrackingBlock(order);
+    });
+  }
+
+  function updateTrackingBlock(order){
+    const block = document.getElementById(`trackBlock-${order.id}`);
+    if (!block) return;
+    const restaurant = restaurants.find(r => r.id === order.restaurant_id);
     const cancelled = ['rejected','cancelled'].includes(order.order_status);
     const currentIndex = STATUS_STEPS.findIndex(s => s.key === order.order_status);
 
@@ -699,16 +784,15 @@ const CustomerApp = (function(){
     const waUrl = localStorage.getItem('snapit_wa_url_' + order.id);
     const waButton = waUrl
       ? `<a href="${waUrl}" target="_blank" class="block text-center rounded-xl py-3 text-sm font-semibold mb-6" style="background:#3F7E4E; color:#fff">
-           If WhatsApp didn't open, tap here to send your order
+           If WhatsApp didn't open, tap here to send this order
          </a>`
       : '';
 
-    document.querySelector('#trackingView > div').innerHTML = `
-      <div class="flex items-center justify-between mb-2">
-        <h2 class="font-display text-2xl font-semibold">Order ${order.order_code}</h2>
-        <button onclick="CustomerApp.closeTracking()" class="text-[var(--ink-soft)] text-2xl leading-none">&times;</button>
+    block.innerHTML = `
+      <div class="pb-4 mb-4 border-b" style="border-color:var(--line)">
+        <p class="font-display text-lg font-semibold">${restaurant ? restaurant.name : ''} <span class="text-sm font-normal text-[var(--ink-soft)]">· ${order.order_code}</span></p>
+        <p class="text-sm text-[var(--ink-soft)] mt-0.5">Total ${money(order.total_amount)} · ${order.delivery_address}</p>
       </div>
-      <p class="text-sm text-[var(--ink-soft)] mb-6">Total ${money(order.total_amount)} · ${order.delivery_address}</p>
       ${waButton}
       <div>${stepsHtml}</div>
     `;
@@ -716,14 +800,15 @@ const CustomerApp = (function(){
 
   function closeTracking(){
     document.getElementById('trackingView').classList.add('hidden');
-    localStorage.removeItem('snapit_tracking_order_id');
-    if (orderChannel){ sb.removeChannel(orderChannel); orderChannel = null; }
+    localStorage.removeItem('snapit_tracking_order_ids');
+    trackingChannels.forEach(ch => sb.removeChannel(ch));
+    trackingChannels = [];
   }
 
   return { init, loadMenuFor, setCategory, setSearch, toggleSearch, addToCart, changeQty, openCart, closeCart, placeOrder, closeTracking };
 })();
 
-/* =========================================================
+ /* =========================================================
    ADMIN APP — namespaced, lives behind the #admin route
    ========================================================= */
 const AdminApp = (function(){
@@ -732,6 +817,8 @@ const AdminApp = (function(){
   let restaurants = [];
   let ordersCache = [];
   let activeMenuRestaurantId = null;
+  let currentMenuItems = [];
+  let editingItemId = null;
   let started = false;
 
   async function checkPasscode(){
@@ -828,9 +915,29 @@ const AdminApp = (function(){
     }).join('') || `<p class="text-sm text-[var(--ink-soft)] text-center py-10">No orders yet.</p>`;
   }
 
+  function confirmDialog(message){
+    return new Promise(resolve => {
+      const modal = document.getElementById('adminConfirmModal');
+      document.getElementById('adminConfirmMessage').textContent = message;
+      modal.classList.remove('hidden');
+      const okBtn = document.getElementById('adminConfirmOkBtn');
+      const cancelBtn = document.getElementById('adminConfirmCancelBtn');
+      function cleanup(result){
+        modal.classList.add('hidden');
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        resolve(result);
+      }
+      function onOk(){ cleanup(true); }
+      function onCancel(){ cleanup(false); }
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+    });
+  }
+
   async function updateStatus(orderId, status){
     if (status === 'rejected' || status === 'cancelled'){
-      const ok = confirm(`Mark this order as ${status}? This can't be undone.`);
+      const ok = await confirmDialog(`Mark this order as ${status}? This can't be undone.`);
       if (!ok) return;
     }
     const { error } = await sb.from('orders').update({ order_status: status }).eq('id', orderId);
@@ -875,6 +982,7 @@ const AdminApp = (function(){
     if (!activeMenuRestaurantId) return;
     const { data: cats } = await sb.from('categories').select('*').eq('restaurant_id', activeMenuRestaurantId).order('sort_order');
     const { data: menuItems } = await sb.from('menu_items').select('*').eq('restaurant_id', activeMenuRestaurantId).order('sort_order');
+    currentMenuItems = menuItems || [];
 
     document.getElementById('menuAdminList').innerHTML = (cats||[]).map(cat => `
       <div class="mb-4">
@@ -890,6 +998,7 @@ const AdminApp = (function(){
                 </div>
               </div>
               <div class="flex items-center gap-3">
+                <button onclick="AdminApp.openEditItem('${item.id}')" class="text-base leading-none" title="Edit item">✏️</button>
                 <button onclick="AdminApp.togglePopular('${item.id}', ${!item.is_popular})" class="text-lg leading-none" title="Mark as popular">
                   ${item.is_popular ? '⭐' : '☆'}
                 </button>
@@ -901,8 +1010,9 @@ const AdminApp = (function(){
             </div>`).join('')}
         </div>
       </div>`).join('');
-     }
- async function toggleAvailability(itemId, newValue){
+  }
+
+  async function toggleAvailability(itemId, newValue){
     const { error } = await sb.from('menu_items').update({ is_available: newValue }).eq('id', itemId);
     if (error) console.error(error);
     loadMenuAdmin();
@@ -914,7 +1024,48 @@ const AdminApp = (function(){
     loadMenuAdmin();
   }
 
-  return { init, checkPasscode, switchTab, updateStatus, setMenuRestaurant, toggleAvailability, togglePopular };
+  function openEditItem(itemId){
+    const item = currentMenuItems.find(i => i.id === itemId);
+    if (!item) return;
+    editingItemId = itemId;
+    document.getElementById('editItemName').value = item.name;
+    const fields = document.getElementById('editItemPriceFields');
+    if (item.price_single !== null){
+      fields.innerHTML = `<input id="editPriceSingle" type="number" inputmode="decimal" placeholder="Price" value="${item.price_single}" class="w-full rounded-lg px-3 py-2.5 text-sm">`;
+    } else {
+      fields.innerHTML = `
+        <input id="editPriceHalf" type="number" inputmode="decimal" placeholder="Half price" value="${item.price_half}" class="w-full rounded-lg px-3 py-2.5 text-sm">
+        <input id="editPriceFull" type="number" inputmode="decimal" placeholder="Full price" value="${item.price_full}" class="w-full rounded-lg px-3 py-2.5 text-sm">
+      `;
+    }
+    document.getElementById('editItemModal').classList.remove('hidden');
+  }
+
+  function closeEditItem(){
+    editingItemId = null;
+    document.getElementById('editItemModal').classList.add('hidden');
+  }
+
+  async function saveItemEdit(){
+    if (!editingItemId) return;
+    const item = currentMenuItems.find(i => i.id === editingItemId);
+    const name = document.getElementById('editItemName').value.trim();
+    if (!name || !item) return;
+
+    const updates = { name };
+    if (item.price_single !== null){
+      updates.price_single = Number(document.getElementById('editPriceSingle').value) || 0;
+    } else {
+      updates.price_half = Number(document.getElementById('editPriceHalf').value) || 0;
+      updates.price_full = Number(document.getElementById('editPriceFull').value) || 0;
+    }
+
+    const { error } = await sb.from('menu_items').update(updates).eq('id', editingItemId);
+    if (error) console.error(error);
+    closeEditItem();
+    loadMenuAdmin();
+}
+return { init, checkPasscode, switchTab, updateStatus, setMenuRestaurant, toggleAvailability, togglePopular, openEditItem, closeEditItem, saveItemEdit };
 })();
 
 /* =========================================================
@@ -931,3 +1082,5 @@ snapitRoute();
 </script>
 </body>
 </html>
+
+                 
